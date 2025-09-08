@@ -180,3 +180,4 @@ electron/*.dll
 electron/.keys
 build/electron/config.js
 generate_msk_reports.py
+nul
