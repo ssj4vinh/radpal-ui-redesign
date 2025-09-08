@@ -1,0 +1,10 @@
+Please revise the following radiology impression based on the user's instruction. Ensure the impression remains concise, clinically relevant, and addresses the key findings.
+
+The user has provided feedback to adjust future outputs. Please rewrite the logic prompt to incorporate their request, while precisely preserving the original format and all important instructions from the original. Please only provide me with the final modified prompt.
+
+User instruction: {{REFINEMENT_INPUT}}
+
+Impression prompt to revise:
+{{IMPRESSION_TEXT}}
+
+Revised impression:

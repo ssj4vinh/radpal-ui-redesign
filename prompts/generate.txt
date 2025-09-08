@@ -1,0 +1,9 @@
+Study Type: {{STUDY_TYPE}}
+
+Findings:
+{{FINDINGS}}
+
+Template:
+{{TEMPLATE}}
+
+Use this information to generate a radiology report.

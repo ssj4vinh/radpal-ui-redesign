@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Confirmed - RadPal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0a;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: #1a1a1a;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: scaleIn 0.5s ease-out 0.2s both;
+        }
+        
+        @keyframes scaleIn {
+            from {
+                transform: scale(0);
+            }
+            to {
+                transform: scale(1);
+            }
+        }
+        
+        .checkmark {
+            color: white;
+            font-size: 40px;
+        }
+        
+        h1 {
+            color: #ffffff;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        p {
+            color: #a0a0a0;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #707070;
+            font-size: 14px;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">RadPal</div>
+        
+        <div class="success-icon">
+            <span class="checkmark">✓</span>
+        </div>
+        
+        <h1>Email Confirmed!</h1>
+        
+        <p>
+            Your email has been successfully verified. You can now close this window and log in to RadPal with your credentials.
+        </p>
+        
+        <p style="font-size: 14px; color: #707070;">
+            If RadPal is already open, you can log in immediately. Otherwise, please launch the RadPal application.
+        </p>
+        
+        <div class="footer">
+            <p>You can safely close this window</p>
+        </div>
+    </div>
+    
+    <script>
+  // Auto-close only when explicitly requested: ?autoclose=1
+  const shouldAutoClose = new URLSearchParams(location.search).get('autoclose') === '1';
+
+  function attemptClose() {
+    const footer = document.querySelector('.footer p');
+    if (footer) footer.textContent = 'This window will close automatically...';
+
+    // If opened by another window (e.g., OAuth flow popup)
+    if (window.opener && !window.opener.closed) {
+      window.close(); // allowed in most browsers for script-opened windows
+      return;
+    }
+
+    // If user navigated here from another page, go back
+    if (history.length > 1) {
+      history.back();
+      return;
+    }
+
+    // Fallback: cannot close this tab
+    if (footer) footer.textContent = 'You can safely close this window.';
+  }
+
+  if (shouldAutoClose) {
+    setTimeout(() => {
+      attemptClose();
+    }, 10000);
+  }
+</script>
+
+</body>
+</html>

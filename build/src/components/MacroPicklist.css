@@ -1,0 +1,173 @@
+/* Macro Picklist Dropdown Styles */
+
+.macro-picklist-container {
+  position: fixed;
+  z-index: 10000;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  max-width: 300px;
+  max-height: 250px;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+}
+
+/* Dark mode support */
+body.dark .macro-picklist-container {
+  background: #2d2d2d;
+  border-color: #444;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.macro-picklist-search {
+  padding: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+body.dark .macro-picklist-search {
+  border-bottom-color: #444;
+}
+
+.macro-picklist-search input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+  background: white;
+  color: #333;
+}
+
+body.dark .macro-picklist-search input {
+  background: #1a1a1a;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.macro-picklist-search input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+body.dark .macro-picklist-search input:focus {
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+.macro-picklist-options {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+}
+
+.macro-picklist-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  user-select: none;
+  color: #333;
+}
+
+body.dark .macro-picklist-item {
+  color: #e0e0e0;
+}
+
+.macro-picklist-item:hover {
+  background-color: #f5f5f5;
+}
+
+body.dark .macro-picklist-item:hover {
+  background-color: #3a3a3a;
+}
+
+.macro-picklist-item.selected {
+  background-color: #007bff;
+  color: white;
+}
+
+body.dark .macro-picklist-item.selected {
+  background-color: #4a9eff;
+  color: white;
+}
+
+.macro-picklist-empty {
+  padding: 16px;
+  text-align: center;
+  color: #999;
+  font-style: italic;
+}
+
+body.dark .macro-picklist-empty {
+  color: #777;
+}
+
+.macro-picklist-footer {
+  padding: 6px 8px;
+  border-top: 1px solid #e0e0e0;
+  background-color: #f9f9f9;
+  border-radius: 0 0 6px 6px;
+}
+
+body.dark .macro-picklist-footer {
+  border-top-color: #444;
+  background-color: #1a1a1a;
+}
+
+.macro-picklist-hint {
+  font-size: 11px;
+  color: #666;
+  display: block;
+  text-align: center;
+}
+
+body.dark .macro-picklist-hint {
+  color: #999;
+}
+
+/* Scrollbar styling */
+.macro-picklist-options::-webkit-scrollbar {
+  width: 8px;
+}
+
+.macro-picklist-options::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.macro-picklist-options::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+body.dark .macro-picklist-options::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.macro-picklist-options::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+body.dark .macro-picklist-options::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.macro-picklist-container {
+  animation: fadeIn 0.2s ease-out;
+}

@@ -1,0 +1,8 @@
+You are a radiology assistant. Based on the following imaging findings, identify the most appropriate study type from this exact list:
+
+MRI Ankle, MRI Foot, MRI Knee, MRI Hip, MRI Shoulder, MRI Elbow, MRI Wrist, MRI Hand, MRI Cervical Spine, MRI Thoracic Spine, MRI Lumbar Spine, MRI Total Spine, DEXA, CT Generic, MRI Generic, DEXA, CT Abdomen Pelvis, CT Pulmonary Embolism, CT Chest, CT Head, Knee Test Template
+
+Imaging Findings:
+{{FINDINGS}}
+
+Respond with only the matching study type as plain text. Do not include any other explanation or formatting.

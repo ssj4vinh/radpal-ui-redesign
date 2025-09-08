@@ -1,0 +1,946 @@
+/* ===============================
+   Global Reset & Theming
+================================= */
+
+* {
+  box-sizing: border-box;
+  /* Ensure uniform cursor behavior - no custom cursor styling */
+  cursor: inherit !important;
+}
+
+/* Force all resizable elements to be non-resizable to prevent cursor jumping */
+textarea, 
+input, 
+div {
+  resize: none !important;
+}
+
+/* Allow natural text selection where appropriate */
+input[type="text"], 
+input[type="email"], 
+input[type="password"], 
+textarea, 
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Removed webkit-app-region CSS override - let inline styles handle it */
+
+/* Transparent background for glassmorphism with sharp corners */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: #333;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  position: relative;
+}
+
+
+/* Rounded corners enabled for modern design */
+/* Previously had border-radius: 0 !important; for sharp design */
+
+
+/* Removed forced transparent backgrounds - let natural white show through */
+
+/* Aggressive elimination of ALL potential edge effects */
+* {
+  outline: none !important;
+  text-shadow: none !important;
+  /* Also eliminate any potential border shadows */
+  border-image: none !important;
+  -webkit-box-reflect: none !important;
+}
+
+/* Target window controls and other potential edge elements */
+.radpal-outer-frame *,
+.window-frame * {
+  box-shadow: none !important;
+  outline: none !important;
+  text-shadow: none !important;
+}
+
+/* Animated gradient that showcases full color range */
+@keyframes shift {
+  0% { background-position: 0% 0%; }
+  25% { background-position: 100% 0%; }
+  50% { background-position: 100% 100%; }
+  75% { background-position: 0% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+/* Removed duplicate - using glassmorphism configuration above */
+
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+  /* Account for window-frame margin */
+  box-sizing: border-box;
+}
+
+/* Placeholder text styling */
+textarea::placeholder {
+  color: #888;
+  font-style: normal;
+  opacity: 0.8;
+}
+
+/* Performance optimizations */
+* {
+  /* Disable will-change on all elements by default */
+  will-change: auto;
+}
+
+/* Remove all backdrop filters - they cause massive performance issues */
+.blur-card,
+.window-frame,
+.settings-sidebar,
+.modal-overlay,
+.modal-content,
+.popup-diff-box,
+.popup-output-textarea,
+input,
+textarea {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Replace backdrop filters with solid backgrounds */
+.blur-card {
+  background: rgba(42, 45, 49, 0.95) !important;
+}
+
+.window-frame {
+  background: rgba(26, 29, 35, 0.98) !important;
+}
+
+/* Optimize hover transitions */
+button {
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+/* Use transform for hover states to avoid repaints */
+button:hover:not(:disabled) {
+  transform: translateZ(0) scale(1.02);
+}
+
+/* Optimize settings sidebar */
+.settings-sidebar {
+  transform: translateX(100%);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.settings-sidebar.open {
+  transform: translateX(0);
+}
+
+/* Optimize overlay transitions */
+.settings-sidebar-overlay {
+  background: rgba(0, 0, 0, 0);
+  transition: background-color 0.2s ease;
+}
+
+.settings-sidebar-overlay.open {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.radpal-root {
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+.radpal-root::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===============================
+   Window Frame Styling
+================================= */
+
+.window-frame {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  /* Use solid background instead of backdrop filter for performance */
+  background: rgba(26, 29, 35, 0.98) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  outline: none;
+  border-radius: 12px;
+  /* Subtle shadow with rounded shape */
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Remove the duplicate shadow effect */
+
+/* Background already set in .window-frame above */
+
+/* Removed hover/focus states that could interfere with window resize detection */
+
+.radpal-outer-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 12px;
+  /* Rounded corners to match window-frame */
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+
+
+
+/* ===============================
+   Input + Textarea Styles
+================================= */
+
+input,
+textarea {
+  background-color: rgba(30, 31, 35, 0.95);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px;
+  font-size: 15px;
+  outline: none;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  position: relative;
+  border-radius: 8px;
+}
+
+input:focus,
+textarea:focus {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(30, 31, 35, 0.85);
+}
+
+/* ===============================
+   Elevated Cards
+================================= */
+
+.elevated-card {
+  box-shadow: none !important;
+  transform: translateY(0);
+  transition: all 0.2s ease;
+  border-radius: 12px;
+}
+
+.elevated-card:hover {
+  box-shadow: none !important;
+  /* Disabled transform to prevent mouse hopping */
+  /* transform: translateY(-1px); */
+}
+
+/* ===============================
+   Blur Cards (Frosted Glass)
+================================= */
+
+.blur-card {
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  background: rgba(42, 45, 49, 0.95);
+}
+
+.blur-card:hover {
+  background: rgba(0, 0, 0, 0.85);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.blur-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ===============================
+   Buttons
+================================= */
+
+.radpal-button {
+  background-color: rgba(42, 45, 49, 0.95);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-weight: 650;
+  text-transform: uppercase;
+  font-size: 14px;
+  min-width: 180px;
+  height: 48px;
+  line-height: 1.5;
+  display: inline-block;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  position: relative;
+}
+
+.radpal-button:hover {
+  background-color: rgba(58, 61, 65, 0.85);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.radpal-button:focus {
+  outline: none;
+}
+
+.radpal-button-report {
+  background-color: #3ABC96;
+}
+
+.radpal-button-report:hover {
+  background-color: #2a9b7a;
+}
+
+.radpal-button-impression {
+  background-color: #3ABC96;
+}
+
+.radpal-button-impression:hover {
+  background-color: #2a9b7a;
+}
+
+/* ===============================
+   Login Panel + Animations
+================================= */
+
+.radpal-login-wrapper {
+  overflow: hidden;
+}
+
+body.login-mode {
+  overflow: hidden;
+}
+
+
+.login-card-animated {
+  animation: fadeInLogin 0.6s ease-out forwards;
+  opacity: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 12px;
+}
+
+.login-message-animated {
+  animation: slideInMessage 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes fadeInLogin {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInMessage {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInWindow {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Apply fade-in to all new windows */
+.window-frame {
+  animation: fadeInWindow 0.3s ease-out;
+}
+
+.radpal-outer-frame {
+  animation: fadeInWindow 0.3s ease-out;
+}
+
+
+
+/* ===============================
+   Glow Focus Pulse - DISABLED
+================================= */
+
+@keyframes pulse-glow {
+  0%   { box-shadow: none; }
+  50%  { box-shadow: none; }
+  100% { box-shadow: none; }
+}
+
+body.radpal-focused .window-frame {
+  animation: none;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* ===============================
+   Utility
+================================= */
+
+label {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.radpal-logo {
+  transition: transform 0.3s ease;
+  background: transparent !important;
+  background-color: transparent !important;
+  mix-blend-mode: normal !important;
+}
+.radpal-logo:hover {
+  transform: scale(1.04);
+}
+
+.radpal-settings-trigger {
+  background-color: rgba(28, 30, 35, 0.95);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: all 0.2s ease;
+  padding: 4px 12px;
+  font-size: 14px;
+}
+
+.radpal-settings-trigger:hover {
+  background-color: rgba(42, 45, 51, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.radpal-dropdown {
+  background-color: rgba(20, 22, 28, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 6px 0;
+  min-width: 180px;
+  font-size: 14px;
+}
+
+.radpal-item {
+  padding: 8px 14px;
+  color: #e2e2e2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.radpal-item:hover {
+  background-color: #1f2128;
+  color: #66b8ff;
+}
+
+
+/* ===============================
+   Report + Impression buttons
+================================= */
+
+.button-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px; /* 👈 space between buttons */
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* ===============================
+   Root
+================================= */
+
+textarea::placeholder {
+  color: #ccc; /* or #aaa for slightly brighter */
+  opacity: 1;  /* ensures full visibility */
+}
+input::placeholder,
+textarea::placeholder {
+  color: #888;
+  opacity: 1;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+}
+
+.auto-pull-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+
+/* ===============================
+   Impression popup
+================================= */
+
+.popup-output-textarea {
+  width: 95%;
+  height: 500px; 
+  font-family: 'JetBrains Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 18px;
+  padding: 16px;
+  background-color: rgba(30, 31, 37, 0.95);
+  color: #f0f0f0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  resize: none;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  margin: 0 auto;
+  display: block;
+}
+
+/* ===============================
+   Report popup
+================================= */
+
+
+.popup-diff-box {
+  width: 95%;
+  min-height: 400px; 
+  margin: 0 auto;
+  padding: 12px;
+  background-color: rgba(30, 31, 37, 0.95);
+  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow-y: auto;
+  font-size: 18px;
+  font-family: 'JetBrains Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.popup-diff-box:focus {
+  outline: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+/* Custom scrollbar for edit report popup */
+.popup-diff-box::-webkit-scrollbar {
+  width: 8px;
+  display: block;
+}
+
+.popup-diff-box::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.popup-diff-box::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.popup-diff-box::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.radpal-button-remove {
+  background-color: #E36756;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.radpal-button-remove:hover {
+  background-color: rgba(227, 103, 86, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+
+
+
+
+body.login-mode,
+body.login-mode html,
+body.login-mode #root {
+  overflow: hidden !important;
+  height: 100% !important;
+  transition: all 0.4s ease;
+}
+
+body.login-mode::-webkit-scrollbar {
+  display: none;
+}
+
+body.login-mode {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+
+body.main-mode,
+body.main-mode html,
+body.main-mode #root {
+  overflow: hidden !important;
+  height: 100% !important;
+  transition: all 0.4s ease;
+}
+
+body.main-mode::-webkit-scrollbar {
+  display: none;
+}
+
+body.main-mode {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+
+/* ===============================
+   Topbar
+================================= */
+
+.radpal-topbar {
+  position: relative;
+  background-color: rgba(0, 0, 0, 0.3);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: none !important;
+  z-index: 10;
+}
+
+
+.radpal-topbar::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 16px;
+  background: transparent !important;
+  z-index: -1;
+}
+
+
+/* ===============================
+   Template Manager
+================================= */
+
+.template-label-button {
+  display: inline-block;
+  padding: 4px 10px;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #000;
+  background-color: #00ff94;
+  box-shadow: none;
+  text-align: center;
+  user-select: none;
+}
+
+
+/* ===============================
+   Root contracted state report + impression buttons
+================================= */
+.radpal-button-mini {
+  padding: 2px 6px;
+  font-size: 11px;
+  height: 24px;
+  line-height: 1.1;
+  font-weight: 400;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+
+/* ===============================
+   Settings Sidebar
+================================= */
+.settings-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 240px;
+  height: 100vh;
+  background-color: rgba(42, 45, 49, 0.98);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px 0 0 12px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  z-index: 1003;
+  transform: translateX(100%);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+
+.settings-sidebar.open {
+  transform: translateX(0);
+}
+
+.settings-sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  z-index: 1002;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.settings-sidebar-overlay.open {
+  opacity: 1;
+  visibility: visible;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.settings-sidebar-header {
+  padding: 24px 20px 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.settings-sidebar-title {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.settings-sidebar-content {
+  flex: 1;
+  padding: 16px 0;
+  overflow-y: auto;
+}
+
+.settings-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: #e2e2e2;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+}
+
+.settings-sidebar-item.active {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+.settings-sidebar-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.settings-sidebar-item.danger {
+  color: #ff6b6b;
+}
+
+.settings-sidebar-item.danger:hover {
+  background-color: rgba(255, 107, 107, 0.1);
+  color: #ff8a8a;
+}
+
+.settings-sidebar-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #ffffff;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  z-index: 1005;
+  pointer-events: auto;
+}
+
+.settings-sidebar-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ===============================
+   Shortcut Manager Modal
+================================= */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.7);
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  background-color: rgba(30, 30, 30, 0.95);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 24px;
+  width: 500px;
+  max-width: 90vw;
+  box-shadow: none;
+}
+
+/* ===============================
+   Window Frame - Simplified for Natural Resize
+================================= */
+
+/* Removed all positioning and pointer-event overrides that could interfere with native window resize detection */
+
+
+/* Notification animations */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Hide scrollbars in popups */
+.popup-container::-webkit-scrollbar {
+  display: none;
+}
+
+.popup-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Dictation recording pulse animation */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 2px 6px rgba(227, 103, 86, 0.3), 0 0 10px rgba(227, 103, 86, 0.2);
+  }
+  50% {
+    box-shadow: 0 2px 6px rgba(227, 103, 86, 0.5), 0 0 20px rgba(227, 103, 86, 0.4);
+  }
+  100% {
+    box-shadow: 0 2px 6px rgba(227, 103, 86, 0.3), 0 0 10px rgba(227, 103, 86, 0.2);
+  }
+}
+
+/* Aggressive shadow removal - override everything except window-frame */
+*:not(.window-frame), *::before, *::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* Specific fix for border artifacts - preserve window-frame shadow */
+.radpal-outer-frame,
+.radpal-root,
+body,
+html {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.window-frame {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  outline: none !important;
+  /* Allow custom shadow to show */
+}
+
+/* Override the TemplateManager CSS that forces #444 borders */
+body.radpal-root,
+body.radpal-root.dark,
+.radpal-root *,
+.window-frame *,
+.radpal-outer-frame * {
+  border-color: transparent !important;
+}
+
+/* Override focus states */
+*:focus {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Override hover states */
+*:hover {
+  box-shadow: none !important;
+}
+
+/* Loading dots animation */
+.loading-dots::after {
+  content: '';
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%, 20% {
+    content: '';
+  }
+  40% {
+    content: '.';
+  }
+  60% {
+    content: '..';
+  }
+  80%, 100% {
+    content: '...';
+  }
+}
+

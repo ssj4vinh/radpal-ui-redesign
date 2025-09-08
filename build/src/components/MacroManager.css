@@ -1,0 +1,455 @@
+/* Macro Manager Styles */
+
+.macro-manager-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.macro-manager-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s ease-out;
+}
+
+body.dark .macro-manager-modal {
+  background: #2d2d2d;
+  color: #e0e0e0;
+}
+
+.macro-manager-header {
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+body.dark .macro-manager-header {
+  border-bottom-color: #444;
+}
+
+.macro-manager-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.macro-manager-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #999;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.macro-manager-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+body.dark .macro-manager-close:hover {
+  background: #3a3a3a;
+  color: #fff;
+}
+
+.macro-manager-error {
+  background: #fee;
+  color: #c00;
+  padding: 12px 16px;
+  margin: 16px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideDown 0.3s ease-out;
+}
+
+body.dark .macro-manager-error {
+  background: rgba(200, 0, 0, 0.2);
+  color: #ff6b6b;
+}
+
+.macro-manager-error button {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 12px;
+}
+
+.macro-manager-toolbar {
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+body.dark .macro-manager-toolbar {
+  border-bottom-color: #444;
+}
+
+.macro-manager-search {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+}
+
+body.dark .macro-manager-search {
+  background: #1a1a1a;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.macro-manager-search:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.macro-manager-btn {
+  padding: 8px 16px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+body.dark .macro-manager-btn {
+  background: #3a3a3a;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.macro-manager-btn:hover {
+  background: #e0e0e0;
+}
+
+body.dark .macro-manager-btn:hover {
+  background: #4a4a4a;
+}
+
+.macro-manager-btn.primary {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.macro-manager-btn.primary:hover {
+  background: #0056b3;
+}
+
+.macro-manager-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Form Styles */
+.macro-manager-form {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.macro-manager-form h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.macro-form-group {
+  margin-bottom: 20px;
+}
+
+.macro-form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+}
+
+body.dark .macro-form-group label {
+  color: #aaa;
+}
+
+.macro-form-group input,
+.macro-form-group select,
+.macro-form-group textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+body.dark .macro-form-group input,
+body.dark .macro-form-group select,
+body.dark .macro-form-group textarea {
+  background: #1a1a1a;
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.macro-form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.macro-options-preview {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+body.dark .macro-options-preview {
+  color: #aaa;
+}
+
+.macro-option-chip {
+  display: inline-block;
+  background: #e0e0e0;
+  padding: 4px 8px;
+  margin: 4px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+body.dark .macro-option-chip {
+  background: #3a3a3a;
+}
+
+.macro-form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* List Styles */
+.macro-manager-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.macro-manager-loading,
+.macro-manager-empty {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-style: italic;
+}
+
+.macro-manager-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.macro-manager-table thead {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+}
+
+body.dark .macro-manager-table thead {
+  background: #2d2d2d;
+}
+
+.macro-manager-table th {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 2px solid #e0e0e0;
+  font-weight: 500;
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #666;
+}
+
+body.dark .macro-manager-table th {
+  border-bottom-color: #444;
+  color: #aaa;
+}
+
+.macro-manager-table td {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+}
+
+body.dark .macro-manager-table td {
+  border-bottom-color: #3a3a3a;
+}
+
+.macro-manager-table tr:hover {
+  background: #f8f8f8;
+}
+
+body.dark .macro-manager-table tr:hover {
+  background: #3a3a3a;
+}
+
+.macro-name {
+  font-weight: 500;
+}
+
+.type-badge,
+.scope-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.type-badge.text {
+  background: #d4edda;
+  color: #155724;
+}
+
+.type-badge.picklist {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+body.dark .type-badge.text {
+  background: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+body.dark .type-badge.picklist {
+  background: rgba(23, 162, 184, 0.2);
+  color: #17a2b8;
+}
+
+.scope-badge.global {
+  background: #e7e7e7;
+  color: #666;
+}
+
+.scope-badge.findings {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.scope-badge.impression {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+body.dark .scope-badge.global {
+  background: rgba(255, 255, 255, 0.1);
+  color: #aaa;
+}
+
+body.dark .scope-badge.findings {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+body.dark .scope-badge.impression {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+.macro-value {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.macro-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.macro-action-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.macro-action-btn:hover {
+  background: #f0f0f0;
+}
+
+body.dark .macro-action-btn:hover {
+  background: #4a4a4a;
+}
+
+.macro-action-btn.delete:hover {
+  background: #fee;
+}
+
+body.dark .macro-action-btn.delete:hover {
+  background: rgba(255, 0, 0, 0.1);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

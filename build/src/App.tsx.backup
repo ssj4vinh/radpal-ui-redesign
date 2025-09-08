@@ -1,0 +1,3426 @@
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useAuth } from './hooks/useAuth'
+import { useGpt } from './hooks/useGpt'
+import { useAgentReport } from './hooks/useAgentReport'
+import { mapRadPalModelToAgent } from '../agent/modelMapping'
+import { useSupabaseTemplatesWithOffline } from './hooks/useSupabaseTemplatesWithOffline'
+import { useWindowResize } from './hooks/useWindowResize'
+import { useStyles } from './hooks/useStyles'
+import LoginPanel from './components/LoginPanel'
+import DictationModal from './components/DictationModal'
+import { supabase } from './lib/supabase'
+import ShortcutManager from './components/ShortcutManager'
+import { offlineStorage } from './services/offlineStorage'
+import LogicEditorChat from './components/LogicEditorChat'
+import LogicEditorDirect from './components/LogicEditorDirect'
+import BlurCard from './components/BlurCard'
+import DragTextEditor from './components/DragTextEditor'
+import AskAI from './components/AskAI'
+import { buttonStyles, layoutStyles } from './utils/styleConstants'
+import { debounce } from './utils/debounce'
+import { localStorageCache } from './utils/localStorage'
+import { diffWordsWithSpace } from 'diff'
+import styles from './App.module.css'
+
+
+export default React.memo(function App() {
+  console.log('🚀 MAIN APP STARTING - if you see this, the main app is loading!');
+  const { width: windowWidth, isContracted } = useWindowResize();
+  const styles = useStyles();
+
+  const [findings, setFindings] = useState('')
+  const findingsTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [dictationError, setDictationError] = useState<string | null>(null)
+  const [isCleaningUp, setIsCleaningUp] = useState(false)
+  
+  // Web Audio API refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const [cleanupError, setCleanupError] = useState<string | null>(null)
+  const [notification, setNotification] = useState<string | null>(null)
+  const autoCleanupEnabled = true // Always enabled
+  const [isAutoCleaningUp, setIsAutoCleaningUp] = useState(false)
+  const [showDebug, setShowDebug] = useState(false)
+  const [autoFindings, setAutoFindings] = useState(false)
+  // Temporarily use useAuth directly to bypass useAuthWithOffline hook chain issues
+  const { user, signOut, loading: authLoading } = useAuth()
+  // Offline mode state
+  const [isOfflineMode, setIsOfflineMode] = useState(() => {
+    const saved = localStorage.getItem('radpal_offline_mode')
+    return saved === 'true'
+  })
+  const lastSyncTime = offlineStorage.getLastSync()
+  
+  // console.log('🔥 App using useAuth directly - user:', user ? `${user.email} (${user.id})` : 'null', 'authLoading:', authLoading);
+
+  // Show notification without stealing focus
+  const showNotification = useCallback((message: string) => {
+    setNotification(message)
+    setTimeout(() => setNotification(null), 3000) // Auto-hide after 3 seconds
+  }, [])
+  const [selectedDictation, setSelectedDictation] = useState(() => localStorageCache.getItem('dictationTarget') || 'PowerScribe')
+  const [showDictationModal, setShowDictationModal] = useState(false)
+  const [showShortcutManager, setShowShortcutManager] = useState(false)
+  const [showSettingsSidebar, setShowSettingsSidebar] = useState(false)
+  const [showLogicEditor, setShowLogicEditor] = useState(false)
+  const [showOfflineDataViewer, setShowOfflineDataViewer] = useState(false)
+  const [showTokenTooltip, setShowTokenTooltip] = useState(false)
+  const [apiProvider, setApiProvider] = useState<'openai' | 'claude-sonnet' | 'claude-opus' | 'claude-opus-4.1' | 'gemini' | 'kimi' | 'gpt-5'>('openai') // Default to GPT-4o
+  const [tokenUsage, setTokenUsage] = useState<{used: number, limit: number, percentage: number}>({
+    used: 0,
+    limit: 125000,
+    percentage: 0
+  })
+  const [colorScheme, setColorScheme] = useState<'venice-blue' | 'dark-ocean' | 'lawrencium' | 'deep-space' | 'void-black' | 'yoda'>('void-black')
+  const [selectedStudyType, setSelectedStudyType] = useState<string>('')
+  const [suggestedStudyTypes, setSuggestedStudyTypes] = useState<Array<{type: string, confidence: number}>>([])
+  const [suggestedStudyType, setSuggestedStudyType] = useState<string>('') // Keep for backward compatibility
+  const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false)
+  const [showStudyTypeDropdown, setShowStudyTypeDropdown] = useState(false)
+  const [studyTypeFilter, setStudyTypeFilter] = useState<string>('')
+  const [favoriteStudyTypes, setFavoriteStudyTypes] = useState<Set<string>>(new Set())
+  
+  // Integrated UI state for generation results
+  const [generationResult, setGenerationResult] = useState<{
+    type: 'report' | 'impression' | null
+    originalFindings: string
+    generatedText: string
+    generationTime: string
+    tokens: { input: number, output: number, total: number }
+    templateText?: string
+    showDiff?: boolean
+    diffParts?: any[] // Pre-calculated diff parts to avoid recalculation
+  } | null>(null)
+  const [showDiffView, setShowDiffView] = useState(false)
+  const [showAskAI, setShowAskAI] = useState(false)
+
+  // Load favorite study types from localStorage
+  useEffect(() => {
+    const savedFavorites = localStorageCache.getItem('favoriteStudyTypes')
+    if (savedFavorites) {
+      try {
+        setFavoriteStudyTypes(new Set(JSON.parse(savedFavorites)))
+      } catch (e) {
+        console.error('Failed to parse favorite study types:', e)
+      }
+    }
+  }, [])
+
+  // Save favorite study types to localStorage
+  const toggleFavoriteStudyType = (studyType: string) => {
+    setFavoriteStudyTypes(prev => {
+      const newFavorites = new Set(prev)
+      if (newFavorites.has(studyType)) {
+        newFavorites.delete(studyType)
+      } else {
+        newFavorites.add(studyType)
+      }
+      localStorageCache.setItem('favoriteStudyTypes', JSON.stringify(Array.from(newFavorites)))
+      return newFavorites
+    })
+  }
+
+  // Load API provider preference
+  useEffect(() => {
+    if (window.electronAPI?.getApiProvider) {
+      window.electronAPI.getApiProvider().then(provider => {
+        setApiProvider(provider);
+      });
+    }
+  }, []);
+
+  // Auto-cleanup is always enabled - no need to load preference
+
+  // Load color scheme preference
+  useEffect(() => {
+    const savedScheme = localStorageCache.getItem('colorScheme') as 'venice-blue' | 'dark-ocean' | 'lawrencium' | 'deep-space' | 'void-black' | 'yoda';
+    if (savedScheme && (savedScheme === 'venice-blue' || savedScheme === 'dark-ocean' || savedScheme === 'lawrencium' || savedScheme === 'deep-space' || savedScheme === 'void-black' || savedScheme === 'yoda')) {
+      setColorScheme(savedScheme);
+    }
+  }, []);
+
+  // Apply color scheme to body class
+  useEffect(() => {
+    // Remove any existing color scheme classes
+    document.body.className = document.body.className.replace(/color-scheme-[\w-]+/g, '');
+    // Add the current color scheme class
+    document.body.classList.add(`color-scheme-${colorScheme}`);
+  }, [colorScheme]);
+
+
+
+  // Close settings sidebar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showSettingsSidebar) {
+        const target = event.target as Element
+        const sidebarElement = document.querySelector('.settings-sidebar')
+        const triggerElement = document.querySelector('[data-settings-trigger]')
+        if (sidebarElement && !sidebarElement.contains(target) && 
+            triggerElement && !triggerElement.contains(target)) {
+          setShowSettingsSidebar(false)
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showSettingsSidebar])
+
+  // Load token usage on startup and when user changes
+  useEffect(() => {
+    if (window.electronAPI?.getTokenUsage) {
+      window.electronAPI.getTokenUsage().then(usage => {
+        setTokenUsage(usage);
+      });
+
+      // Listen for token usage updates
+      const handleTokenUpdate = (usage) => {
+        setTokenUsage(usage);
+      };
+
+      window.electronAPI.onTokenUsageUpdated?.(handleTokenUpdate);
+    }
+  }, []);
+
+  // Reload token usage when user authentication state changes
+  useEffect(() => {
+    if (user && window.electronAPI?.getTokenUsage) {
+      // Small delay to ensure user session is fully established
+      setTimeout(() => {
+        window.electronAPI.getTokenUsage().then(usage => {
+          console.log('🔄 Refreshing token usage after user login:', usage);
+          setTokenUsage(usage);
+        });
+      }, 1000);
+    }
+  }, [user]);
+
+
+  // Handle API provider change
+  const handleApiProviderChange = async (provider: 'openai' | 'claude-sonnet' | 'claude-opus' | 'claude-opus-4.1' | 'gemini' | 'kimi' | 'gpt-5') => {
+    setApiProvider(provider);
+    if (window.electronAPI?.setApiProvider) {
+      await window.electronAPI.setApiProvider(provider);
+    }
+  };
+
+  // Handle color scheme toggle
+  const handleColorSchemeToggle = () => {
+    let nextScheme: 'venice-blue' | 'dark-ocean' | 'lawrencium' | 'deep-space' | 'void-black' | 'yoda';
+    if (colorScheme === 'venice-blue') {
+      nextScheme = 'dark-ocean';
+    } else if (colorScheme === 'dark-ocean') {
+      nextScheme = 'lawrencium';
+    } else if (colorScheme === 'lawrencium') {
+      nextScheme = 'deep-space';
+    } else if (colorScheme === 'deep-space') {
+      nextScheme = 'void-black';
+    } else if (colorScheme === 'void-black') {
+      nextScheme = 'yoda';
+    } else {
+      nextScheme = 'venice-blue';
+    }
+    setColorScheme(nextScheme);
+    localStorageCache.setItem('colorScheme', nextScheme);
+  };
+
+  // Window control functions
+  const handleContract = () => {
+    // console.log('Contract button clicked');
+    if (window.electron?.ipcRenderer) {
+      window.electron.ipcRenderer.send('contract-window');
+    } else {
+      console.error('Electron IPC not available');
+    }
+  }
+
+
+  const handleMinimize = () => {
+    window.electron?.ipcRenderer?.send('minimize-popup')
+  }
+
+  const handleClose = () => {
+    window.electron?.ipcRenderer?.send('close-popup')
+  }
+
+  const handleExpand = () => {
+    window.electron?.ipcRenderer?.send('expand-window')
+  }
+
+  // Dictation functions
+  const handleDictationToggle = useCallback(async () => {
+    if (isRecording) {
+      // Stop dictation
+      setIsRecording(false)
+      setDictationError(null)
+      if (window.electronAPI?.stopDictation) {
+        try {
+          await window.electronAPI.stopDictation()
+        } catch (error) {
+          console.error('Failed to stop dictation:', error)
+        }
+      }
+    } else {
+      // Start dictation
+      setDictationError(null)
+      if (window.electronAPI?.startDictation) {
+        try {
+          const result = await window.electronAPI.startDictation()
+          if (result.success) {
+            setIsRecording(true)
+          } else {
+            setDictationError(result.error || 'Failed to start dictation')
+          }
+        } catch (error) {
+          setDictationError('Failed to start dictation: ' + (error as Error).message)
+        }
+      }
+    }
+  }, [isRecording])
+
+  // Web Audio API functions
+  const startAudioCapture = useCallback(async () => {
+    try {
+      console.log('🎤 Starting Web Audio API capture...')
+      
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        } 
+      })
+      streamRef.current = stream
+      
+      // Create AudioContext for processing
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 16000
+      })
+      audioContextRef.current = audioContext
+      
+      // Create MediaStreamAudioSourceNode
+      const source = audioContext.createMediaStreamSource(stream)
+      
+      // Create ScriptProcessorNode to capture raw audio data
+      const scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1)
+      
+      scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+        const inputBuffer = audioProcessingEvent.inputBuffer
+        const inputData = inputBuffer.getChannelData(0)
+        
+        // Convert Float32 to Int16 for Deepgram
+        const int16Array = new Int16Array(inputData.length)
+        for (let i = 0; i < inputData.length; i++) {
+          int16Array[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32767))
+        }
+        
+        // Send to main process
+        window.electronAPI?.sendAudioData?.(int16Array.buffer)
+      }
+      
+      // Connect the nodes
+      source.connect(scriptProcessor)
+      scriptProcessor.connect(audioContext.destination)
+      
+      console.log('✅ Web Audio API capture started')
+      
+    } catch (error) {
+      console.error('❌ Failed to start audio capture:', error)
+      window.electronAPI?.sendAudioError?.(error.message)
+    }
+  }, [])
+
+  const stopAudioCapture = useCallback(() => {
+    try {
+      console.log('🛑 Stopping Web Audio API capture...')
+      
+      // Stop the media stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+      
+      // Close AudioContext
+      if (audioContextRef.current) {
+        audioContextRef.current.close()
+        audioContextRef.current = null
+      }
+      
+      console.log('✅ Web Audio API capture stopped')
+      
+    } catch (error) {
+      console.error('❌ Error stopping audio capture:', error)
+    }
+  }, [])
+
+  // Listen for audio capture commands from main process
+  useEffect(() => {
+    const unsubscribes: Array<() => void> = []
+    
+    if (window.electronAPI?.onStartAudioCapture) {
+      const unsubscribeStart = window.electronAPI.onStartAudioCapture(() => {
+        console.log('📡 Received start-audio-capture from main process')
+        startAudioCapture()
+      })
+      unsubscribes.push(unsubscribeStart)
+    }
+    
+    if (window.electronAPI?.onStopAudioCapture) {
+      const unsubscribeStop = window.electronAPI.onStopAudioCapture(() => {
+        console.log('📡 Received stop-audio-capture from main process')
+        stopAudioCapture()
+      })
+      unsubscribes.push(unsubscribeStop)
+    }
+    
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe())
+    }
+  }, [startAudioCapture, stopAudioCapture])
+
+  // Listen for dictation text from main process
+  useEffect(() => {
+    if (window.electronAPI?.onDictationText) {
+      const unsubscribe = window.electronAPI.onDictationText((text: string) => {
+        const textarea = findingsTextareaRef.current
+        if (textarea) {
+          const start = textarea.selectionStart
+          const end = textarea.selectionEnd
+          
+          // If there's selected text, replace it
+          if (start !== end) {
+            const beforeSelection = findings.substring(0, start)
+            const afterSelection = findings.substring(end)
+            const newFindings = beforeSelection + text + afterSelection
+            setFindings(newFindings)
+            
+            // Set cursor position after the inserted text
+            setTimeout(() => {
+              const newCursorPosition = start + text.length
+              textarea.setSelectionRange(newCursorPosition, newCursorPosition)
+              textarea.focus()
+            }, 0)
+          } else {
+            // No selection - append to end as before
+            setFindings(prev => prev + (prev ? ' ' : '') + text)
+          }
+        } else {
+          // Fallback if ref is not available
+          setFindings(prev => prev + (prev ? ' ' : '') + text)
+        }
+      })
+      return unsubscribe
+    }
+  }, [findings])
+
+  // Listen for dictation errors
+  useEffect(() => {
+    if (window.electronAPI?.onDictationError) {
+      const unsubscribe = window.electronAPI.onDictationError((error: string) => {
+        console.error('Dictation error:', error)
+        setIsRecording(false)
+        setDictationError(error)
+      })
+      return unsubscribe
+    }
+  }, [])
+  
+  // Listen for Power Mic III events
+  useEffect(() => {
+    if (!window.electronAPI) return
+    
+    const unsubscribes: Array<() => void> = []
+    
+    // Power Mic III record button pressed
+    if (window.electronAPI.onPowerMicRecordPressed) {
+      unsubscribes.push(
+        window.electronAPI.onPowerMicRecordPressed(() => {
+          console.log('🎤 Power Mic III: Record button pressed - triggering dictation')
+          if (!isRecording) {
+            handleDictationToggle()
+          }
+        })
+      )
+    }
+    
+    // Power Mic III record button released
+    if (window.electronAPI.onPowerMicRecordReleased) {
+      unsubscribes.push(
+        window.electronAPI.onPowerMicRecordReleased(() => {
+          console.log('🎤 Power Mic III: Record button released - stopping dictation')
+          // Stop dictation when PowerMic button is released (push-to-talk mode)
+          if (isRecording) {
+            handleDictationToggle()
+          }
+        })
+      )
+    }
+    
+    // Generic dictation toggle trigger
+    if (window.electronAPI.onTriggerDictationToggle) {
+      unsubscribes.push(
+        window.electronAPI.onTriggerDictationToggle(() => {
+          console.log('🎤 Dictation toggle triggered')
+          handleDictationToggle()
+        })
+      )
+    }
+    
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe())
+    }
+  }, [handleDictationToggle, isRecording])
+
+  // Listen for cleanup results
+  useEffect(() => {
+    if (window.electronAPI?.onCleanupResult) {
+      const unsubscribe = window.electronAPI.onCleanupResult((cleanedText: string) => {
+        setFindings(cleanedText)
+        setIsCleaningUp(false)
+        setCleanupError(null)
+      })
+      return unsubscribe
+    }
+  }, [])
+
+  // Listen for cleanup errors
+  useEffect(() => {
+    if (window.electronAPI?.onCleanupError) {
+      const unsubscribe = window.electronAPI.onCleanupError((error: string) => {
+        console.error('Cleanup error:', error)
+        setIsCleaningUp(false)
+        setCleanupError(error)
+      })
+      return unsubscribe
+    }
+  }, [])
+
+  // Listen for dictation chunk complete (for real-time auto-cleanup)
+  useEffect(() => {
+    if (window.electronAPI?.onDictationChunkComplete) {
+      const unsubscribe = window.electronAPI.onDictationChunkComplete(async (chunkText: string) => {
+        if (autoCleanupEnabled && chunkText && chunkText.trim().length > 0) {
+          console.log('🔄 Processing chunk in real-time:', chunkText);
+          setIsAutoCleaningUp(true);
+          
+          try {
+            if (window.electronAPI?.autoCleanupText) {
+              const result = await window.electronAPI.autoCleanupText(chunkText);
+              if (result.success && result.cleanedText) {
+                console.log('🧠 Chunk processed:', chunkText, '→', result.cleanedText);
+                // The cleaned text will replace the raw text that was already added
+                setFindings(prev => {
+                  // Replace the last occurrence of the raw chunk with the cleaned version
+                  const lastIndex = prev.lastIndexOf(chunkText.trim());
+                  if (lastIndex !== -1) {
+                    return prev.slice(0, lastIndex) + result.cleanedText + prev.slice(lastIndex + chunkText.trim().length);
+                  }
+                  // If not found, just append (shouldn't happen normally)
+                  return prev + (prev ? ' ' : '') + result.cleanedText;
+                });
+              } else {
+                console.warn('🧠 Chunk processing failed, keeping original');
+              }
+            }
+          } catch (error) {
+            console.error('🧠 Chunk processing error:', error);
+          } finally {
+            setIsAutoCleaningUp(false);
+          }
+        }
+      });
+      return unsubscribe;
+    }
+  }, [autoCleanupEnabled]);
+
+  // Cleanup function
+  const handleCleanupText = useCallback(async () => {
+    if (!findings || findings.trim().length === 0) {
+      setCleanupError('No text to clean up')
+      return
+    }
+
+    if (isCleaningUp) {
+      return // Already processing
+    }
+
+    try {
+      setIsCleaningUp(true)
+      setCleanupError(null)
+      
+      if (window.electronAPI?.cleanupText) {
+        const result = await window.electronAPI.cleanupText(findings)
+        if (!result.success) {
+          setCleanupError(result.error || 'Failed to clean up text')
+          setIsCleaningUp(false)
+        }
+        // Success is handled by the onCleanupResult listener
+      } else {
+        setCleanupError('Cleanup functionality not available')
+        setIsCleaningUp(false)
+      }
+    } catch (error) {
+      console.error('Failed to cleanup text:', error)
+      setCleanupError('Failed to clean up text: ' + (error as Error).message)
+      setIsCleaningUp(false)
+    }
+  }, [findings, isCleaningUp])
+
+  // Auto-cleanup toggle removed - feature is always enabled
+
+  // Add F5 keyboard shortcut for dictation toggle
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'F5') {
+        event.preventDefault(); // Prevent browser refresh
+        handleDictationToggle();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleDictationToggle]);
+
+  // Backup and restore functions
+  const handleBackupData = () => {
+    try {
+      const backupData = {
+        ...offlineStorage.exportOfflineData(),
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+      }
+      
+      const dataStr = JSON.stringify(backupData, null, 2)
+      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+      const url = URL.createObjectURL(dataBlob)
+      
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `radpal-backup-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      
+      showNotification('✅ Backup exported successfully!')
+    } catch (error) {
+      console.error('Backup failed:', error)
+      showNotification('❌ Backup export failed')
+    }
+  }
+
+  const handleRestoreData = () => {
+    try {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.json'
+      
+      input.onchange = (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0]
+        if (!file) return
+        
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          try {
+            const backupData = JSON.parse(e.target?.result as string)
+            
+            // Basic validation
+            if (!backupData.version || !backupData.exportDate) {
+              throw new Error('Invalid backup file format')
+            }
+            
+            // Import the data
+            offlineStorage.importOfflineData(backupData)
+            
+            showNotification('✅ Backup restored successfully! Please restart the app to see changes.')
+          } catch (error) {
+            console.error('Restore failed:', error)
+            showNotification('❌ Backup restore failed - invalid file format')
+          }
+        }
+        reader.readAsText(file)
+      }
+      
+      input.click()
+    } catch (error) {
+      console.error('Restore failed:', error)
+      showNotification('❌ Backup restore failed')
+    }
+  }
+
+  const handleViewOfflineData = () => {
+    setShowOfflineDataViewer(true)
+    setShowSettingsSidebar(false)
+  }
+
+  const handleSettingsAction = (action: string) => {
+    if (action === 'edit') {
+      window.electron?.ipcRenderer?.send('open-popup-templates', { isOfflineMode })
+    } else if (action === 'edit-logic') {
+      window.electron?.ipcRenderer?.send('open-popup-logic', { isOfflineMode })
+    } else if (action === 'debug') {
+      window.dispatchEvent(new CustomEvent('toggle-debug'))
+    } else if (action === 'shortcuts') {
+      setShowShortcutManager(true)
+    } else if (action === 'logout') {
+      // console.log('🔍 TopBar logout initiated');
+      // Resize window to default login dimensions before logout
+      window.electron?.ipcRenderer?.send('resize-window', {
+        width: 600,
+        height: 900
+      });
+      window.electronAPI?.authSignOut().then(() => {
+        // console.log('🔍 Supabase signOut completed');
+        localStorageCache.setItem('autoFindings', 'false')
+        // console.log('🔍 About to reload page');
+        // Give a bit more time for auth state to propagate before reload
+        setTimeout(() => {
+          window.location.reload()
+        }, 300)
+      }).catch((error) => {
+        console.error('❌ Logout failed:', error)
+        localStorageCache.setItem('autoFindings', 'false')
+        // Even if logout fails, still reload to clear state
+        setTimeout(() => {
+          window.location.reload()
+        }, 300)
+      })
+    }
+  }
+
+
+  // Window resizing is now handled natively by Electron
+
+  
+
+
+  // ✅ Toggle body class for login page + root UI (no scrollbar)
+  useEffect(() => {
+  if (!user && !authLoading) {
+    document.body.classList.add('login-mode');
+    document.body.classList.remove('main-mode');
+  } else if (user) {
+    document.body.classList.add('main-mode');
+    document.body.classList.remove('login-mode');
+
+    // Set main UI window to wider size for better usability
+    window.electron?.ipcRenderer?.send('resize-window', {
+      width: 1500,
+      height: 900
+    });
+
+    // ✅ Ask main process to launch AHK shortcut EXE
+    window.electron?.ipcRenderer?.invoke('launch-autofill-hotkeys');
+  }
+}, [user, authLoading]);
+
+
+
+
+  useEffect(() => {
+  const sendSessionToMain = async () => {
+    const result = await window.electronAPI?.authGetSession()
+    if (result?.data?.session) {
+      // console.log('📤 Sending Supabase session to main:', result.data.session)
+      window.electron?.ipcRenderer?.invoke('set-supabase-session', result.data.session)
+    } else {
+      // console.warn('⚠️ No session found in main app')
+    }
+  }
+
+  if (user) {
+    sendSessionToMain()
+  }
+}, [user])
+
+// Handle popup content events
+useEffect(() => {
+  const cleanup = window.electronAPI?.onPopupContent?.((data) => {
+    if (data?.type === 'toggle-debug') {
+      setShowDebug(prev => !prev)
+    }
+  })
+
+  return () => {
+    if (cleanup && typeof cleanup === 'function') {
+      cleanup()
+    }
+  }
+}, [])
+
+  useEffect(() => {
+  const toggleHandler = () => setShowDebug(prev => !prev)
+  window.addEventListener('toggle-debug', toggleHandler)
+  return () => window.removeEventListener('toggle-debug', toggleHandler)
+}, [])
+
+  
+  // 2. Send current Supabase user to main process for popup use
+useEffect(() => {
+  if (user) {
+    // console.log('📤 Sending user to main process:', user)
+    window.electron?.ipcRenderer?.invoke('set-current-user', user).then(() => {
+      // console.log('✅ user set remotely')
+    }).catch(() => {
+      // console.error('❌ Failed to set user remotely:', err)
+    })
+  }
+}, [user])
+
+useEffect(() => {
+  console.log('🔧 IPC useEffect running, checking electron availability...');
+  const ipc = window?.electron?.ipcRenderer;
+  console.log('🔧 IPC object:', !!ipc, 'has on function:', typeof ipc?.on);
+  console.log('🔧 IPC properties:', Object.keys(ipc || {}));
+  console.log('🔧 Full electron object:', window?.electron);
+  console.log('🔧 window.electron keys:', Object.keys(window?.electron || {}));
+  
+  if (!ipc || typeof ipc.on !== 'function') {
+    console.log('❌ IPC not available, returning early');
+    return;
+  }
+  console.log('✅ IPC available, setting up listeners...');
+
+  const reportHandler = () => {
+    // console.log('⚡️ IPC → handleGenerate triggered');
+    handleGenerate(); // make sure this function exists in App.tsx
+  };
+
+  const impressionHandler = () => {
+    // console.log('⚡️ IPC → handleGenerateImpression triggered');
+    handleGenerateImpression(); // make sure this also exists
+  };
+
+  const autofillHandler = (_event, autofillKey) => {
+    const shortcuts = JSON.parse(localStorageCache.getItem('globalShortcuts') || '[]');
+    const match = shortcuts.find((s) => s.action === autofillKey);
+
+    if (match?.text) {
+      navigator.clipboard.writeText(match.text);
+      setTimeout(() => document.execCommand('paste'), 100);
+    }
+  };
+
+  // Logic editor handler
+  const logicEditorHandler = (data) => {
+    console.log('🎯 Logic editor handler received:', data);
+    const { userId, studyType } = data;
+    if (userId && studyType) {
+      console.log('✅ Setting selectedStudyType to:', studyType);
+      setSelectedStudyType(studyType);
+      setShowLogicEditor(true);
+      console.log('✅ Logic editor should now be visible');
+    } else {
+      console.error('❌ Missing userId or studyType:', { userId, studyType });
+    }
+  };
+
+  ipc.on('trigger-generate-report', reportHandler);
+  ipc.on('trigger-generate-impression', impressionHandler);
+  ipc.on('trigger-auto-text-fill', autofillHandler);
+  console.log('🔧 Setting up open-logic-editor event listener');
+  ipc.on('open-logic-editor', logicEditorHandler);
+  
+  // Test the listener immediately
+  setTimeout(() => {
+    console.log('🧪 Testing event listener manually...');
+    logicEditorHandler({ userId: 'test', studyType: 'Test Study' });
+  }, 2000);
+
+  return () => {
+    ipc.removeListener('trigger-generate-report', reportHandler);
+    ipc.removeListener('trigger-generate-impression', impressionHandler);
+    ipc.removeListener('trigger-auto-text-fill', autofillHandler);
+    ipc.removeListener('open-logic-editor', logicEditorHandler);
+  };
+}, []);
+
+// Separate useEffect for logic editor listener using electronAPI
+useEffect(() => {
+  console.log('🔧 Setting up logic editor listener...');
+  
+  if (!window.electronAPI?.onOpenLogicEditor) {
+    console.log('❌ onOpenLogicEditor not available');
+    return;
+  }
+
+  console.log('✅ Setting up open-logic-editor event listener');
+  const unsubscribe = window.electronAPI.onOpenLogicEditor((data) => {
+    console.log('🎯 Logic editor handler received:', data);
+    const { userId, studyType } = data;
+    if (userId && studyType) {
+      console.log('✅ Setting selectedStudyType to:', studyType);
+      setSelectedStudyType(studyType);
+      setShowLogicEditor(true);
+      console.log('✅ Logic editor should now be visible');
+    } else {
+      console.error('❌ Missing userId or studyType:', { userId, studyType });
+    }
+  });
+
+  // Test successful - listener is working!
+
+  return unsubscribe;
+}, []);
+
+  const {
+  templates = {},
+  loading: templatesLoading = false,
+  saveTemplate = async () => {}
+} = useSupabaseTemplatesWithOffline(user, true, isOfflineMode) || {}
+
+  const {
+    generateReport,
+    generateReportFromTemplates,
+    generateImpressionFromTemplates,
+    loading: gptLoading,
+    debugPrompt,
+    debugResult
+  } = useGpt()
+
+  const {
+    generateReportWithAgent,
+    generateImpressionWithAgent,
+    loading: agentLoading,
+    error: agentError
+  } = useAgentReport()
+
+  // Auto-suggest study type based on findings using local keyword matching
+  const suggestStudyType = useCallback((findingsText: string) => {
+    if (!findingsText.trim() || findingsText.length < 10 || selectedStudyType) {
+      setSuggestedStudyTypes([])
+      setSuggestedStudyType('')
+      return
+    }
+
+    setIsGeneratingSuggestion(true)
+    
+    try {
+      const lowerFindings = findingsText.toLowerCase()
+      const suggestions: Array<{type: string, confidence: number}> = []
+      
+      console.log('🔍 Auto-suggest running with findings:', findingsText.substring(0, 50))
+      console.log('🔍 Templates loaded:', templates ? Object.keys(templates).length : 0)
+      
+      // Define keyword patterns for each study type
+      const studyTypePatterns = {
+        'MRI Ankle': ['ankle', 'talus', 'calcaneus', 'tibiotalar', 'tibiofibular ligament', 'deltoid ligament', 'achilles', 'peroneal tendon', 'plantar fascia'],
+        'MRI Foot': ['foot', 'metatarsal', 'phalanx', 'plantar', 'morton', 'sesamoid', 'lisfranc', 'forefoot', 'midfoot', 'toe'],
+        'MRI Knee': ['knee', 'meniscus', 'acl', 'pcl', 'mcl', 'lcl', 'patella', 'patellar', 'cruciate', 'collateral ligament', 'baker cyst', 'popliteal', 'femoral condyle', 'tibial plateau'],
+        'MRI Hip': ['hip', 'femoral head', 'acetabulum', 'labrum', 'femoral neck', 'trochanter', 'iliopsoas', 'gluteal', 'piriformis', 'hip joint'],
+        'MRI Shoulder': ['shoulder', 'rotator cuff', 'supraspinatus', 'infraspinatus', 'subscapularis', 'teres minor', 'labrum', 'glenoid', 'humeral head', 'acromioclavicular', 'glenohumeral'],
+        'MRI Elbow': ['elbow', 'lateral epicondyle', 'medial epicondyle', 'olecranon', 'radial head', 'ulnar nerve', 'cubital tunnel', 'tennis elbow', 'golfer'],
+        'MRI Wrist': ['wrist', 'carpal', 'scaphoid', 'lunate', 'triquetrum', 'pisiform', 'hamate', 'capitate', 'trapezoid', 'trapezium', 'tfcc', 'triangular fibrocartilage'],
+        'MRI Hand': ['hand', 'metacarpal', 'phalanges', 'finger', 'thumb', 'mcp joint', 'pip joint', 'dip joint', 'flexor tendon', 'extensor tendon', 'trigger finger'],
+        'MRI Cervical Spine': ['cervical', 'c-spine', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'neck', 'cervical disc', 'cervical stenosis', 'cervical radiculopathy'],
+        'MRI Thoracic Spine': ['thoracic', 't-spine', 't1', 't2', 't3', 't4', 't5', 't6', 't7', 't8', 't9', 't10', 't11', 't12', 'thoracic disc', 'mid back'],
+        'MRI Lumbar Spine': ['lumbar', 'l-spine', 'l1', 'l2', 'l3', 'l4', 'l5', 's1', 'lower back', 'lumbar disc', 'disc herniation', 'lumbar stenosis', 'sciatica', 'nerve root', 'facet'],
+        'MRI Total Spine': ['total spine', 'whole spine', 'entire spine', 'full spine', 'complete spine'],
+        'CT Abdomen Pelvis': ['abdomen', 'pelvis', 'liver', 'spleen', 'kidney', 'pancreas', 'bowel', 'appendix', 'bladder', 'ovary', 'uterus', 'prostate', 'colon', 'intestine'],
+        'CT Chest': ['chest', 'lung', 'pulmonary', 'pleural', 'mediastinum', 'thorax', 'bronchi', 'pneumonia', 'nodule', 'embolism', 'aorta'],
+        'CT Head': ['head', 'brain', 'skull', 'intracranial', 'hemorrhage', 'stroke', 'subdural', 'subarachnoid', 'ventricle', 'sinuses'],
+        'CT Pulmonary Embolism': ['pulmonary embolism', 'pe protocol', 'pulmonary artery', 'embolus', 'thrombosis', 'ctpa'],
+        'DEXA': ['dexa', 'bone density', 'osteoporosis', 'osteopenia', 't-score', 'z-score', 'bmd', 'fracture risk'],
+        'MRI Generic': ['mri', 'magnetic resonance'],
+        'CT Generic': ['ct', 'computed tomography', 'cat scan']
+      }
+      
+      // Score each study type based on keyword matches
+      for (const [studyType, keywords] of Object.entries(studyTypePatterns)) {
+        // Check if template exists OR if no templates are loaded yet (allow suggestions to work)
+        if (templates && Object.keys(templates).length > 0 && !templates[studyType]) {
+          continue // Only skip if templates are loaded AND this specific template doesn't exist
+        }
+        
+        let score = 0
+        let matchedKeywords = 0
+        
+        for (const keyword of keywords) {
+          if (lowerFindings.includes(keyword)) {
+            // Give higher weight to more specific/longer keywords
+            const weight = keyword.split(' ').length > 1 ? 3 : 1
+            score += weight
+            matchedKeywords++
+            console.log(`  ✓ Matched "${keyword}" for ${studyType} (weight: ${weight})`)
+          }
+        }
+        
+        if (score > 0) {
+          // Calculate confidence based on matched keywords
+          // Base confidence on number of matches and their weights
+          const baseConfidence = (matchedKeywords / Math.min(3, keywords.length)) * 60 // Up to 60% for matching 3 keywords
+          const scoreBonus = Math.min(35, score * 10) // Up to 35% bonus for weighted matches
+          const confidence = Math.min(95, Math.round(baseConfidence + scoreBonus))
+          
+          console.log(`  → ${studyType}: ${matchedKeywords} matches, score ${score}, confidence ${confidence}%`)
+          suggestions.push({ type: studyType, confidence })
+        }
+      }
+      
+      // Sort by confidence and take top 3
+      suggestions.sort((a, b) => b.confidence - a.confidence)
+      const topSuggestions = suggestions.slice(0, 3).filter(s => s.confidence >= 20) // Lowered threshold
+      
+      console.log('🔍 Local suggestions:', topSuggestions)
+      
+      if (topSuggestions.length > 0) {
+        setSuggestedStudyTypes(topSuggestions)
+        setSuggestedStudyType(topSuggestions[0].type)
+      } else {
+        setSuggestedStudyTypes([])
+        setSuggestedStudyType('')
+      }
+    } catch (error) {
+      console.error('Auto-suggest error:', error)
+      setSuggestedStudyTypes([])
+      setSuggestedStudyType('')
+    } finally {
+      // Add a small delay to simulate processing
+      setTimeout(() => {
+        setIsGeneratingSuggestion(false)
+      }, 100)
+    }
+  }, [selectedStudyType, templates])
+
+  // Debounced version of suggestStudyType with longer delay to prevent excessive queries
+  const debouncedSuggestStudyType = useMemo(
+    () => debounce(suggestStudyType, 1000), // Wait 1 second after user stops typing
+    [suggestStudyType]
+  )
+  
+  // Auto-suggest study type when findings change (from dictation or manual input)
+  useEffect(() => {
+    if (!findings || findings.trim().length < 10) {
+      setSuggestedStudyTypes([])
+      setSuggestedStudyType('')
+      return
+    }
+    if (findings.trim().length > 20) {
+      try {
+        debouncedSuggestStudyType(findings)
+      } catch (error) {
+        console.log('Auto-suggest error from dictation:', error)
+      }
+    }
+  }, [findings, debouncedSuggestStudyType])
+
+const openEditablePopup = (content) => {
+  const channel = content?.mode === 'impression-only' ? 'open-popup-impression' : 'open-popup'
+  if (window?.electron?.ipcRenderer) {
+    window.electron.ipcRenderer.send(channel, content)
+  } else {
+    // console.error('❌ IPC not available in window context.')
+  }
+}
+
+
+
+const handleGenerate = useCallback(async () => {
+  try {
+    console.log('🔍 handleGenerate called');
+    console.log('🔍 selectedStudyType:', selectedStudyType);
+    console.log('🔍 templates keys:', Object.keys(templates));
+    console.log('🔍 generateReportWithAgent available:', !!generateReportWithAgent);
+  
+  // Check if study type is selected
+  if (!selectedStudyType) {
+    console.log('❌ No study type selected');
+    showNotification('Please select a study type before generating report');
+    return;
+  }
+
+  // Validate that the entered study type exists in templates
+  if (!templates[selectedStudyType]) {
+    console.log('❌ Study type not found in templates:', selectedStudyType);
+    console.log('❌ Available templates:', Object.keys(templates));
+    showNotification(`Invalid study type: "${selectedStudyType}". Please select from the available options.`);
+    return;
+  }
+
+  let finalFindings = findings;
+  if (autoFindings && window.electronAPI?.getFindings) {
+    finalFindings = await window.electronAPI.getFindings();
+    setFindings(finalFindings);
+  }
+
+  console.log('🔍 Starting generation');
+  // STEP 1: Clear any previous generation result
+  setGenerationResult(null);
+
+  try {
+    console.log('🔍 Starting report generation with agent');
+    // STEP 2: Use new agent-based system
+    const model = mapRadPalModelToAgent(apiProvider);
+    const startTime = Date.now();
+    
+    const agentResult = await generateReportWithAgent(
+      finalFindings,
+      selectedStudyType,
+      model
+    );
+    
+    console.log('🔍 Agent result:', agentResult);
+
+    const generationTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    // STEP 3: Update main UI with results
+    const templateText = templates[selectedStudyType]?.template || '';
+    const generatedText = agentResult.text || '❌ Report generation failed.';
+    
+    // Pre-calculate diff parts to avoid recalculation during editing
+    const diffParts = diffWordsWithSpace(templateText.trim(), generatedText.trim()).filter((part, i) => {
+      // Skip very small changes (single spaces or characters)
+      if (part.value.trim().length <= 1 && (part.added || part.removed)) {
+        return false;
+      }
+      return true;
+    });
+    
+    setGenerationResult({
+      type: 'report',
+      originalFindings: finalFindings,
+      templateText: templateText,
+      generatedText: generatedText,
+      generationTime,
+      tokens: agentResult.tokens,
+      showDiff: true, // Enable diff view for report generation
+      diffParts: diffParts // Store pre-calculated diff
+    });
+    
+    // Replace findings with generated report
+    console.log('🔍 Generated report text:', agentResult.text);
+    console.log('🔍 Generated report length:', agentResult.text?.length);
+    console.log('🔍 Generated report first 200 chars:', agentResult.text?.substring(0, 200));
+    console.log('🔍 Generated report newlines count:', (agentResult.text?.match(/\n/g) || []).length);
+    console.log('🔍 Generated report double newlines count:', (agentResult.text?.match(/\n\n/g) || []).length);
+    setFindings(agentResult.text || '❌ Report generation failed.');
+    
+    // Diff view is now always-on, no need to toggle
+  } catch (error) {
+    console.error('Agent report generation failed:', error);
+    const errorMessage = `❌ Report generation failed: ${error.message || 'Unknown error'}`;
+    const templateText = templates[selectedStudyType]?.template || '';
+    
+    // Pre-calculate diff parts even for error case
+    const diffParts = diffWordsWithSpace(templateText.trim(), errorMessage.trim()).filter((part, i) => {
+      // Skip very small changes (single spaces or characters)
+      if (part.value.trim().length <= 1 && (part.added || part.removed)) {
+        return false;
+      }
+      return true;
+    });
+    
+    setGenerationResult({
+      type: 'report',
+      originalFindings: finalFindings,
+      templateText: templateText,
+      generatedText: errorMessage,
+      generationTime: '0.0',
+      tokens: { input: 0, output: 0, total: 0 },
+      showDiff: true, // Enable diff view for report generation
+      diffParts: diffParts // Store pre-calculated diff
+    });
+    setFindings(errorMessage);
+  }
+} catch (error) {
+  console.error('❌ handleGenerate error:', error);
+  showNotification(`Generation failed: ${error.message || 'Unknown error'}`);
+}
+}, [autoFindings, templates, generateReportWithAgent, findings, selectedStudyType, apiProvider, showNotification]);
+
+
+
+  const handleGenerateImpression = useCallback(async () => {
+  // Check if study type is selected
+  if (!selectedStudyType) {
+    showNotification('Please select a study type before generating impression');
+    return;
+  }
+
+  // Validate that the entered study type exists in templates
+  if (!templates[selectedStudyType]) {
+    showNotification(`Invalid study type: "${selectedStudyType}". Please select from the available options.`);
+    return;
+  }
+
+  let finalFindings = findings;
+  if (autoFindings && window.electronAPI?.getFindings) {
+    finalFindings = await window.electronAPI.getFindings();
+    setFindings(finalFindings);
+  }
+
+  // STEP 1: Clear any previous generation result
+  setGenerationResult(null);
+
+  try {
+    // STEP 2: Use new agent-based system
+    const model = mapRadPalModelToAgent(apiProvider);
+    const startTime = Date.now();
+    
+    const agentResult = await generateImpressionWithAgent(
+      finalFindings,
+      selectedStudyType,
+      model
+    );
+
+    const generationTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    // STEP 3: Update main UI with results - no diff view for impression
+    // Just replace the findings text directly without showing diff
+    setFindings(agentResult.text || '❌ Impression generation failed.');
+    
+    // Update status message only (no diff view)
+    setGenerationResult({
+      type: 'impression',
+      originalFindings: finalFindings,
+      templateText: '', // No template comparison for impression
+      generatedText: agentResult.text || '❌ Impression generation failed.',
+      generationTime,
+      tokens: agentResult.tokens,
+      showDiff: false // Flag to indicate no diff should be shown
+    });
+    
+    // Diff view is now always-on, shows changes automatically
+  } catch (error) {
+    console.error('Agent impression generation failed:', error);
+    const errorMessage = `❌ Impression generation failed: ${error.message || 'Unknown error'}`;
+    setGenerationResult({
+      type: 'impression',
+      originalFindings: finalFindings,
+      templateText: '', // No template comparison for impression
+      generatedText: errorMessage,
+      generationTime: '0.0',
+      tokens: { input: 0, output: 0, total: 0 },
+      showDiff: false // Flag to indicate no diff should be shown
+    });
+    setFindings(errorMessage);
+  }
+}, [autoFindings, templates, generateImpressionWithAgent, findings, selectedStudyType, apiProvider, showNotification])
+
+
+
+  // Debug logging to see what's happening with auth state
+  // console.log('🔍 App render - authLoading:', authLoading, 'user:', user ? `${user.email} (${user.id})` : 'null');
+  // console.log('🔍 Templates loaded:', Object.keys(templates).length, 'keys:', Object.keys(templates));
+  // console.log('🔍 Selected study type:', selectedStudyType);
+  // console.log('🔍 gptLoading:', gptLoading, 'templatesLoading:', templatesLoading);
+
+  return (
+  authLoading ? (
+    <div style={{ padding: 40 }}>🔐 Loading user...</div>
+  ) : !user ? (
+    <div className="radpal-outer-frame">
+      <div className="window-frame">
+        <LoginPanel />
+      </div>
+    </div>
+  ) : (
+    <div className="radpal-outer-frame" style={isContracted ? { overflow: 'visible' } : {}}>
+      <div className="window-frame" style={isContracted ? { overflow: 'visible' } : {}}>
+        {!isContracted && (
+          <div
+            className="radpal-root dark"
+            style={{
+              padding: '12px',
+              minHeight: '100vh',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+
+            {/* Top Bar - New thin topbar with main controls */}
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 50,
+              background: 'rgba(42, 45, 49, 0.95)',
+              backdropFilter: 'blur(12px) saturate(120%)',
+              WebkitBackdropFilter: 'blur(12px) saturate(120%)',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 16px',
+              zIndex: 1000,
+              gap: 12
+            }}>
+              {/* Draggable area in topbar */}
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 200,
+                right: 200,
+                height: '100%',
+                WebkitAppRegion: 'drag'
+              }} />
+              
+              {/* Microphone Toggle */}
+              <button
+                onClick={handleDictationToggle}
+                disabled={gptLoading || autoFindings}
+                style={{
+                  padding: '8px 12px',
+                  background: isRecording ? 'linear-gradient(135deg, #E36756 0%, #c7564a 100%)' : 'rgba(42, 45, 49, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 8,
+                  color: '#fff',
+                  fontSize: 14,
+                  fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  cursor: gptLoading || autoFindings ? 'not-allowed' : 'pointer',
+                  opacity: gptLoading || autoFindings ? 0.5 : 1,
+                  transition: 'all 0.2s ease',
+                  WebkitAppRegion: 'no-drag',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                {isRecording ? '⏸ Recording...' : '🎙 Dictate'}
+              </button>
+              
+              {/* Clear All Button */}
+              <button
+                onClick={() => {
+                  setSelectedStudyType('')
+                  setFindings('')
+                  setSuggestedStudyTypes([])
+                  setSuggestedStudyType('')
+                  setGenerationResult(null)
+                  showNotification('🗑️ Cleared study type and findings')
+                }}
+                style={{
+                  padding: '8px 12px',
+                  background: 'rgba(227, 103, 86, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 8,
+                  color: '#E36756',
+                  fontSize: 14,
+                  fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  WebkitAppRegion: 'no-drag'
+                }}
+              >
+                🗑 Clear All
+              </button>
+              
+              {/* Spacer */}
+              <div style={{ flex: 1 }} />
+              
+              {/* Report Button */}
+              <button
+                onClick={handleGenerate}
+                disabled={gptLoading || templatesLoading}
+                style={{
+                  padding: '8px 16px',
+                  background: 'linear-gradient(135deg, #3ABC96 0%, #2a9b7a 100%)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 8,
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  cursor: gptLoading || templatesLoading ? 'not-allowed' : 'pointer',
+                  opacity: gptLoading || templatesLoading ? 0.5 : 1,
+                  transition: 'all 0.2s ease',
+                  WebkitAppRegion: 'no-drag'
+                }}
+              >
+                📄 Report
+              </button>
+              
+              {/* Impression Button */}
+              <button
+                onClick={handleGenerateImpression}
+                disabled={gptLoading || templatesLoading}
+                style={{
+                  padding: '8px 16px',
+                  background: 'linear-gradient(135deg, #3ABC96 0%, #2a9b7a 100%)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 8,
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  cursor: gptLoading || templatesLoading ? 'not-allowed' : 'pointer',
+                  opacity: gptLoading || templatesLoading ? 0.5 : 1,
+                  transition: 'all 0.2s ease',
+                  WebkitAppRegion: 'no-drag'
+                }}
+              >
+                💭 Impression
+              </button>
+              
+              {/* Settings Button */}
+              <button
+                style={{
+                  padding: '8px 12px',
+                  background: 'rgba(42, 45, 49, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 8,
+                  color: '#fff',
+                  fontSize: 14,
+                  fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  WebkitAppRegion: 'no-drag'
+                }}
+                onClick={() => setShowSettingsSidebar(true)}
+                data-settings-trigger
+              >
+                ⚙️
+              </button>
+            </div>
+            
+            {/* Offline Mode Indicator */}
+            {isOfflineMode && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 20,
+                  right: 140,
+                  padding: '8px 12px',
+                  background: 'rgba(255, 165, 0, 0.9)',
+                  border: '1px solid rgba(255, 165, 0, 0.3)',
+                  borderRadius: 8,
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  zIndex: 1000,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+                title={`Offline mode active${lastSyncTime ? `. Last sync: ${lastSyncTime.toLocaleString()}` : '. No previous sync found.'}`}
+              >
+                🔌 Offline
+                {lastSyncTime && (
+                  <span style={{ fontSize: 10, opacity: 0.8 }}>
+                    ({Math.floor((Date.now() - lastSyncTime.getTime()) / (1000 * 60))}m ago)
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Window Controls - Direct on UI */}
+            <button
+              onClick={handleContract}
+              style={{
+                position: 'absolute',
+                top: 20,
+                right: 90,
+                background: 'rgba(255, 255, 255, 0.05)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 16,
+                padding: '4px 10px',
+                color: '#ccc',
+                WebkitAppRegion: 'no-drag',
+                zIndex: 1002,
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'
+                e.currentTarget.style.color = '#fff'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+                e.currentTarget.style.boxShadow = '0 3px 6px rgba(0, 0, 0, 0.15)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+                e.currentTarget.style.color = '#ccc'
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+              }}
+              title="Contract Window"
+            >
+              ⤢
+            </button>
+
+            <button
+              onClick={handleMinimize}
+              style={{
+                position: 'absolute',
+                top: 20,
+                right: 50,
+                background: 'rgba(255, 255, 255, 0.05)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 16,
+                padding: '4px 10px',
+                color: '#ccc',
+                WebkitAppRegion: 'no-drag',
+                zIndex: 1002,
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'
+                e.currentTarget.style.color = '#fff'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+                e.currentTarget.style.boxShadow = '0 3px 6px rgba(0, 0, 0, 0.15)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+                e.currentTarget.style.color = '#ccc'
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              –
+            </button>
+
+            <button
+              onClick={handleClose}
+              style={{
+                position: 'absolute',
+                top: 20,
+                right: 16,
+                background: 'linear-gradient(135deg, #E36756 0%, #c85545 100%)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 16,
+                padding: '4px 10px',
+                color: '#fff',
+                WebkitAppRegion: 'no-drag',
+                zIndex: 1002,
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 6px rgba(227, 103, 86, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #c85545 0%, #b04436 100%)'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(227, 103, 86, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #E36756 0%, #c85545 100%)'
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 2px 6px rgba(227, 103, 86, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+              }}
+            >
+              ×
+            </button>
+
+            {/* Token Status Bar */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              paddingLeft: '7.5%',
+              paddingRight: '7.5%',
+              width: '90%',
+              margin: '0 auto',
+              marginTop: 60,
+              marginBottom: 15,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {/* Empty left side to match layout */}
+              </div>
+              
+              {/* Token Status Bar - matching model button container width */}
+              <div style={{ width: '100%' }}>
+                <BlurCard style={{ 
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: 8,
+                  position: 'relative',
+                  width: '100%',
+                  gap: 6
+                }}>
+                  {/* Description text */}
+                  <div style={{
+                    fontSize: 12,
+                    color: '#aaa',
+                    textAlign: 'center',
+                    fontWeight: 300,
+                    textShadow: 'none',
+                    userSelect: 'none',
+                    fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  }}>
+                    Daily tokens: {tokenUsage?.used?.toLocaleString() || 0} / {tokenUsage?.limit?.toLocaleString() || 125000}
+                  </div>
+                  
+                  {/* Token status bar - fills the entire model button container width */}
+                  <div style={{ 
+                    width: '100%', 
+                    height: windowWidth < 600 ? 8 : windowWidth < 800 ? 10 : 12, 
+                    backgroundColor: 'rgba(20, 22, 25, 0.8)',
+                    borderRadius: (windowWidth < 600 ? 8 : windowWidth < 800 ? 10 : 12) / 2,
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2)'
+                  }}>
+                    <div 
+                      style={{
+                        width: `${Math.min(tokenUsage?.percentage || 0, 100)}%`,
+                        height: '100%',
+                        backgroundColor: (tokenUsage?.percentage || 0) > 90 ? '#E36756' : 
+                                       (tokenUsage?.percentage || 0) > 75 ? '#E1865D' : '#3ABC96',
+                        transition: 'all 0.3s ease',
+                        borderRadius: `${(windowWidth < 600 ? 8 : windowWidth < 800 ? 10 : 12) / 2}px 0 0 ${(windowWidth < 600 ? 8 : windowWidth < 800 ? 10 : 12) / 2}px`,
+                        boxShadow: '0 0 12px rgba(58, 188, 150, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                      }}
+                    />
+                  </div>
+                </BlurCard>
+              </div>
+            </div>
+
+            {/* API Provider Toggle and Auto-pull checkbox */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  paddingLeft: '7.5%',
+                  paddingRight: '7.5%',
+                  width: '90%',
+                  margin: '0 auto',
+                  marginBottom: 10,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, WebkitAppRegion: 'no-drag', zIndex: 1, position: 'relative' }}>
+                  {/* Auto-pull button moved to sidebar */}
+                </div>
+                
+                {/* Platform Toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <BlurCard style={{ 
+                    display: 'flex', 
+                    padding: 2
+                  }}>
+                    <button
+                      onClick={() => handleApiProviderChange('openai')}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: apiProvider === 'openai' ? '#5F33FF' : 'transparent',
+                        backdropFilter: 'blur(12px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: apiProvider === 'openai' ? '0 4px 12px rgba(95, 51, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.1)',
+                        ...(apiProvider === 'openai' ? {
+                          background: 'linear-gradient(135deg, #5F33FF 0%, #4a28cc 100%)',
+                          color: '#fff',
+                          textShadow: 'none',
+                        } : {
+                          background: 'linear-gradient(to bottom, #ffffff, #999999, #333333)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          textShadow: 'none',
+                        }),
+                        borderRadius: 16,
+                        fontSize: 14,
+                        fontWeight: 300,
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      GPT-4o
+                    </button>
+                    <button
+                      onClick={() => handleApiProviderChange('gpt-5')}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: apiProvider === 'gpt-5' ? '#FF6B35' : 'transparent',
+                        backdropFilter: 'blur(12px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: apiProvider === 'gpt-5' ? '0 4px 12px rgba(255, 107, 53, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.1)',
+                        ...(apiProvider === 'gpt-5' ? {
+                          background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)',
+                          color: '#fff',
+                          textShadow: 'none',
+                        } : {
+                          background: 'linear-gradient(to bottom, #ffffff, #999999, #333333)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          textShadow: 'none',
+                        }),
+                        borderRadius: 16,
+                        fontSize: 14,
+                        fontWeight: 300,
+                        fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      GPT-5
+                    </button>
+                    <button
+                      onClick={() => handleApiProviderChange('gemini')}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: apiProvider === 'gemini' ? '#5F33FF' : 'transparent',
+                        backdropFilter: 'blur(12px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: apiProvider === 'gemini' ? '0 4px 12px rgba(95, 51, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.1)',
+                        ...(apiProvider === 'gemini' ? {
+                          background: 'linear-gradient(135deg, #5F33FF 0%, #4a28cc 100%)',
+                          color: '#fff',
+                          textShadow: 'none',
+                        } : {
+                          background: 'linear-gradient(to bottom, #ffffff, #999999, #333333)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          textShadow: 'none',
+                        }),
+                        borderRadius: 16,
+                        fontSize: 14,
+                        fontWeight: 300,
+                        fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      Gemini 2.5 Flash
+                    </button>
+                    <button
+                      onClick={() => handleApiProviderChange('claude-sonnet')}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: apiProvider === 'claude-sonnet' ? '#5F33FF' : 'transparent',
+                        backdropFilter: 'blur(12px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: apiProvider === 'claude-sonnet' ? '0 4px 12px rgba(95, 51, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.1)',
+                        ...(apiProvider === 'claude-sonnet' ? {
+                          background: 'linear-gradient(135deg, #5F33FF 0%, #4a28cc 100%)',
+                          color: '#fff',
+                          textShadow: 'none',
+                        } : {
+                          background: 'linear-gradient(to bottom, #ffffff, #999999, #333333)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          textShadow: 'none',
+                        }),
+                        borderRadius: 16,
+                        fontSize: 14,
+                        fontWeight: 300,
+                        fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      Claude 4 Sonnet
+                    </button>
+                    <button
+                      onClick={() => handleApiProviderChange('claude-opus')}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: apiProvider === 'claude-opus' ? '#5F33FF' : 'transparent',
+                        backdropFilter: 'blur(12px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: apiProvider === 'claude-opus' ? '0 4px 12px rgba(95, 51, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.1)',
+                        ...(apiProvider === 'claude-opus' ? {
+                          background: 'linear-gradient(135deg, #5F33FF 0%, #4a28cc 100%)',
+                          color: '#fff',
+                          textShadow: 'none',
+                        } : {
+                          background: 'linear-gradient(to bottom, #ffffff, #999999, #333333)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          textShadow: 'none',
+                        }),
+                        borderRadius: 16,
+                        fontSize: 14,
+                        fontWeight: 300,
+                        fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      Claude 4 Opus
+                    </button>
+                    <button
+                      onClick={() => handleApiProviderChange('claude-opus-4.1')}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: apiProvider === 'claude-opus-4.1' ? '#7A4FFF' : 'transparent',
+                        backdropFilter: 'blur(12px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: apiProvider === 'claude-opus-4.1' ? '0 4px 12px rgba(122, 79, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.1)',
+                        ...(apiProvider === 'claude-opus-4.1' ? {
+                          background: 'linear-gradient(135deg, #7A4FFF 0%, #6338DD 100%)',
+                          color: '#fff',
+                          textShadow: 'none',
+                        } : {
+                          background: 'linear-gradient(to bottom, #ffffff, #999999, #333333)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          textShadow: 'none',
+                        }),
+                        borderRadius: 16,
+                        fontSize: 14,
+                        fontWeight: 300,
+                        fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      Claude 4.1 Opus
+                    </button>
+                    <button
+                      onClick={() => handleApiProviderChange('kimi')}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: apiProvider === 'kimi' ? '#5F33FF' : 'transparent',
+                        backdropFilter: 'blur(12px) saturate(180%)',
+                        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: apiProvider === 'kimi' ? '0 4px 12px rgba(95, 51, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.1)',
+                        ...(apiProvider === 'kimi' ? {
+                          background: 'linear-gradient(135deg, #5F33FF 0%, #4a28cc 100%)',
+                          color: '#fff',
+                          textShadow: 'none',
+                        } : {
+                          background: 'linear-gradient(to bottom, #ffffff, #999999, #333333)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          textShadow: 'none',
+                        }),
+                        borderRadius: 16,
+                        fontSize: 14,
+                        fontWeight: 300,
+                        fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      Kimi v2
+                    </button>
+                  </BlurCard>
+                </div>
+                
+                {/* Clear All Button */}
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'center',
+                  gap: 8,
+                  marginTop: 12
+                }}>
+                  <button
+                    onClick={() => {
+                      setSelectedStudyType('')
+                      setFindings('')
+                      setSuggestedStudyTypes([])
+                      setSuggestedStudyType('')
+                      setGenerationResult(null) // Exit diff view mode when clearing
+                      showNotification('🗑️ Cleared study type and findings')
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: (!selectedStudyType && !findings) ? 'transparent' : 'rgba(227, 103, 86, 0.1)',
+                      backdropFilter: 'blur(12px) saturate(180%)',
+                      WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      boxShadow: (!selectedStudyType && !findings) ? '0 2px 6px rgba(0, 0, 0, 0.1)' : '0 4px 12px rgba(227, 103, 86, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
+                      borderRadius: 16,
+                      fontSize: 14,
+                      fontWeight: 300,
+                      fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                      transition: 'all 0.2s ease',
+                      color: (!selectedStudyType && !findings) ? '#666' : '#E36756',
+                      cursor: (!selectedStudyType && !findings) ? 'not-allowed' : 'pointer',
+                      opacity: (!selectedStudyType && !findings) ? 0.4 : 1
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedStudyType || findings) {
+                        e.currentTarget.style.backgroundColor = 'rgba(227, 103, 86, 0.2)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(227, 103, 86, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedStudyType || findings) {
+                        e.currentTarget.style.backgroundColor = 'rgba(227, 103, 86, 0.1)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(227, 103, 86, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                      }
+                    }}
+                    disabled={!selectedStudyType && !findings}
+                    title="Clear both study type and findings"
+                  >
+                    Clear All
+                  </button>
+                </div>
+                
+              </div>
+
+              {/* Study Type Dropdown */}
+              <div
+                style={{
+                  position: 'relative',
+                  width: '90%',
+                  margin: '0 auto 20px auto',
+                  opacity: autoFindings ? 0 : 1,
+                  maxHeight: autoFindings ? 0 : 100,
+                  overflow: 'visible',
+                  transition: 'all 0.3s ease',
+                  pointerEvents: autoFindings ? 'none' : 'auto'
+                }}
+              >
+                <input
+                  value={studyTypeFilter || selectedStudyType}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setStudyTypeFilter(value)
+                    setShowStudyTypeDropdown(true)
+                    
+                    // If exact match found, select it
+                    if (templates && templates[value]) {
+                      setSelectedStudyType(value)
+                      setSuggestedStudyTypes([])
+                      setSuggestedStudyType('')
+                    }
+                  }}
+                  onFocus={() => {
+                    setShowStudyTypeDropdown(true)
+                    setStudyTypeFilter('')
+                  }}
+                  onBlur={(e) => {
+                    // Delay hiding to allow click on dropdown items
+                    setTimeout(() => {
+                      setShowStudyTypeDropdown(false)
+                      setStudyTypeFilter('')
+                    }, 200)
+                  }}
+                  placeholder="Select or search study type..."
+                  style={{
+                    width: '100%',
+                    padding: '12px 70px 12px 16px', // Add right padding for both buttons
+                    backgroundColor: 'rgba(42, 45, 49, 0.95)',
+                    color: (studyTypeFilter || selectedStudyType) ? '#fff' : '#999',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 12,
+                    fontSize: 14,
+                    fontFamily: 'DM Sans, sans-serif',
+                    outline: 'none',
+                    cursor: 'text',
+                    backdropFilter: 'blur(12px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                  }}
+                />
+                
+                {/* Custom Dropdown Menu */}
+                {showStudyTypeDropdown && templates && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    marginTop: 4,
+                    maxHeight: 300,
+                    overflowY: 'auto',
+                    backgroundColor: 'rgba(42, 45, 49, 0.98)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: 8,
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                    zIndex: 100
+                  }}>
+                    {(() => {
+                      // Filter study types based on search
+                      const filteredTypes = Object.keys(templates)
+                        .filter(type => 
+                          !studyTypeFilter || 
+                          type.toLowerCase().includes(studyTypeFilter.toLowerCase())
+                        )
+                      
+                      // Separate favorites and non-favorites
+                      const favoriteTypes = filteredTypes.filter(type => favoriteStudyTypes.has(type)).sort()
+                      const regularTypes = filteredTypes.filter(type => !favoriteStudyTypes.has(type)).sort()
+                      
+                      // Combine with favorites first
+                      const allTypes = [...favoriteTypes, ...regularTypes]
+                      
+                      return (
+                        <>
+                          {favoriteTypes.length > 0 && !studyTypeFilter && (
+                            <div style={{
+                              padding: '6px 16px',
+                              color: '#FFA500',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              borderBottom: '1px solid rgba(255, 165, 0, 0.2)',
+                              backgroundColor: 'rgba(255, 165, 0, 0.05)'
+                            }}>
+                              ★ FAVORITES
+                            </div>
+                          )}
+                          {allTypes.map((studyType, index) => {
+                            const isFavorite = favoriteStudyTypes.has(studyType)
+                            const showDivider = !studyTypeFilter && isFavorite && index === favoriteTypes.length - 1 && regularTypes.length > 0
+                            
+                            return (
+                              <React.Fragment key={studyType}>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    padding: '10px 16px',
+                                    color: studyType === selectedStudyType ? '#3ABC96' : '#fff',
+                                    backgroundColor: studyType === selectedStudyType ? 'rgba(58, 188, 150, 0.1)' : 'transparent',
+                                    fontSize: 14,
+                                    fontFamily: 'DM Sans, sans-serif',
+                                    transition: 'background-color 0.2s ease',
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                    cursor: 'pointer'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (studyType !== selectedStudyType) {
+                                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)'
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (studyType !== selectedStudyType) {
+                                      e.currentTarget.style.backgroundColor = 'transparent'
+                                    }
+                                  }}
+                                >
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleFavoriteStudyType(studyType)
+                                    }}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: isFavorite ? '#FFA500' : '#666',
+                                      fontSize: 16,
+                                      cursor: 'pointer',
+                                      padding: '0 8px 0 0',
+                                      transition: 'color 0.2s ease',
+                                      display: 'flex',
+                                      alignItems: 'center'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.color = isFavorite ? '#FFB833' : '#FFA500'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.color = isFavorite ? '#FFA500' : '#666'
+                                    }}
+                                    title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                  >
+                                    {isFavorite ? '★' : '☆'}
+                                  </button>
+                                  <div
+                                    style={{ flex: 1 }}
+                                    onClick={() => {
+                                      setSelectedStudyType(studyType)
+                                      setStudyTypeFilter('')
+                                      setShowStudyTypeDropdown(false)
+                                      setSuggestedStudyTypes([])
+                                      setSuggestedStudyType('')
+                                      lastSuggestionTimeRef.current = Date.now()
+                                    }}
+                                  >
+                                    {studyType}
+                                    {studyType === selectedStudyType && (
+                                      <span style={{ marginLeft: 8, color: '#3ABC96' }}>✓</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {showDivider && (
+                                  <div style={{
+                                    padding: '6px 16px',
+                                    color: '#999',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.02)'
+                                  }}>
+                                    ALL STUDY TYPES
+                                  </div>
+                                )}
+                              </React.Fragment>
+                            )
+                          })}
+                        </>
+                      )
+                    })()}
+                    {Object.keys(templates).filter(type => 
+                      !studyTypeFilter || 
+                      type.toLowerCase().includes(studyTypeFilter.toLowerCase())
+                    ).length === 0 && (
+                      <div style={{
+                        padding: '12px 16px',
+                        color: '#999',
+                        fontSize: 14,
+                        fontStyle: 'italic',
+                        textAlign: 'center'
+                      }}>
+                        No matching study types
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* View Template button */}
+                {selectedStudyType && templates[selectedStudyType] && (
+                  <button
+                    onClick={() => {
+                      // Open template viewer window
+                      const templateData = templates[selectedStudyType];
+                      window.electron?.ipcRenderer?.invoke('open-template-viewer', {
+                        studyType: selectedStudyType,
+                        template: templateData.template || ''
+                      });
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      right: 40,
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: '#3ABC96',
+                      fontSize: 18,
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      lineHeight: 1,
+                      transition: 'all 0.2s ease',
+                      zIndex: 2
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = '#4ACC96'
+                      e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = '#3ABC96'
+                      e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
+                    }}
+                    title="View Template"
+                    aria-label="View template for selected study type"
+                  >
+                    📄
+                  </button>
+                )}
+
+                {/* Clear button for study type */}
+                {selectedStudyType && (
+                  <button
+                    onClick={() => {
+                      setSelectedStudyType('')
+                      setStudyTypeFilter('')
+                      setShowStudyTypeDropdown(false)
+                      setSuggestedStudyTypes([])
+                      setSuggestedStudyType('')
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      right: 12,
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: '#999',
+                      fontSize: 20,
+                      fontWeight: 300,
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      lineHeight: 1,
+                      transition: 'color 0.2s ease',
+                      zIndex: 2
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = '#fff'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = '#999'
+                    }}
+                    className={styles.clearButton}
+                    aria-label="Clear study type"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {/* Findings textarea */}
+              <div
+                style={{
+                  maxHeight: autoFindings ? 0 : 500,
+                  opacity: autoFindings ? 0 : 1,
+                  overflow: 'visible',
+                  transition: 'all 0.3s ease',
+                  marginBottom: autoFindings ? 0 : 20,
+                  pointerEvents: autoFindings ? 'none' : 'auto',
+                  width: '90%',
+                  margin: '0 auto'
+                }}
+              >
+                <div style={{ 
+                  position: 'relative',
+                  background: 'rgba(42, 45, 49, 0.95)',
+                  backdropFilter: 'none',
+                  WebkitBackdropFilter: 'none',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 16,
+                  overflow: 'hidden'
+                }}>
+                
+                  {/* Auto-suggestion UI - moved to top-right of findings area */}
+                  {(suggestedStudyTypes.length > 0 || isGeneratingSuggestion) && !selectedStudyType && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 10,
+                        maxWidth: 300,
+                        background: 'rgba(58, 188, 150, 0.1)',
+                        border: '1px solid rgba(58, 188, 150, 0.3)',
+                        borderRadius: 8,
+                        padding: '8px 12px',
+                        color: '#3ABC96',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        zIndex: 10,
+                      }}
+                    >
+                      {isGeneratingSuggestion ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}
+                        >
+                          <div 
+                            style={{ 
+                              width: 12, 
+                              height: 12, 
+                              border: '2px solid rgba(58, 188, 150, 0.3)',
+                              borderTop: '2px solid #3ABC96',
+                              borderRadius: '50%'
+                            }}
+                            className={styles.spin}
+                          />
+                          Analyzing findings...
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              marginBottom: '4px'
+                            }}
+                          >
+                            <span>🤖 AI Suggestions:</span>
+                            <button
+                              onClick={() => {
+                                setSuggestedStudyTypes([])
+                                setSuggestedStudyType('')
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'rgba(58, 188, 150, 0.7)',
+                                fontSize: 10,
+                                cursor: 'pointer',
+                                padding: '2px'
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                          {suggestedStudyTypes.map((suggestion, index) => (
+                            <div
+                              key={suggestion.type}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '4px 6px',
+                                background: index === 0 ? 'rgba(58, 188, 150, 0.15)' : 'rgba(58, 188, 150, 0.05)',
+                                borderRadius: '4px',
+                                fontSize: '11px'
+                              }}
+                            >
+                              <span style={{ flex: 1 }}>
+                                <strong>{suggestion.type}</strong>
+                                <span style={{ opacity: 0.7, marginLeft: '6px' }}>
+                                  ({suggestion.confidence}%)
+                                </span>
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setSelectedStudyType(suggestion.type)
+                                  setSuggestedStudyTypes([])
+                                  setSuggestedStudyType('')
+                                }}
+                                style={{
+                                  background: 'rgba(58, 188, 150, 0.2)',
+                                  border: '1px solid rgba(58, 188, 150, 0.3)',
+                                  borderRadius: 3,
+                                  color: '#3ABC96',
+                                  fontSize: 9,
+                                  padding: '2px 5px',
+                                  cursor: 'pointer',
+                                  marginLeft: '8px'
+                                }}
+                              >
+                                Use
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Unified findings area - shows diff when it's a report generation result, otherwise regular textarea */}
+                  {generationResult && generationResult.type === 'report' && generationResult.showDiff !== false && generationResult.templateText ? (
+                    // Show diff content with inline editing
+                    <div style={{ position: 'relative' }}>
+                      <div
+                        contentEditable={!gptLoading && !agentLoading}
+                        onInput={(e) => {
+                          const newFindings = e.currentTarget.textContent || '';
+                          setFindings(newFindings)
+                          
+                          // Don't trigger auto-suggestions while in diff view mode
+                          // Keep the diff view visible but prevent new diff calculations
+                        }}
+                        style={{
+                          width: '100%',
+                          height: '40vh',
+                          minHeight: 200,
+                          maxHeight: '50vh',
+                          padding: '16px 40px 16px 16px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                          color: '#fff',
+                          border: '1px solid rgba(58, 188, 150, 0.2)',
+                          borderRadius: 16,
+                          outline: 'none',
+                          overflowY: 'auto',
+                          fontSize: 14,
+                          fontFamily: 'DM Sans, sans-serif',
+                          lineHeight: '1.6',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word'
+                        }}
+                        suppressContentEditableWarning={true}
+                      >
+                        {/* Diff content with inline highlighting - using pre-calculated diff parts */}
+                        {generationResult.diffParts?.map((part, i) => {
+                          return (
+                            <span
+                              key={i}
+                              style={{
+                                backgroundColor: part.added ? 'rgba(58, 188, 150, 0.3)' :
+                                               part.removed ? 'rgba(227, 103, 86, 0.3)' : 'transparent',
+                                color: part.added ? '#3ABC96' :
+                                       part.removed ? '#E36756' : '#fff',
+                                textDecoration: part.removed ? 'line-through' : 'none',
+                                borderRadius: '2px',
+                                padding: part.added || part.removed ? '1px 2px' : '0'
+                              }}
+                            >
+                              {part.value}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    // Regular textarea when no generation result
+                    <textarea
+                      value={findings}
+                      onChange={(e) => {
+                        const newFindings = e.target.value;
+                        setFindings(newFindings)
+                        
+                        // Clear suggestions if text is too short
+                        if (newFindings.trim().length < 10) {
+                          setSuggestedStudyTypes([])
+                          setSuggestedStudyType('')
+                          return
+                        }
+                        
+                        // Only trigger auto-suggestion when text is substantial (>20 chars) and using debounced version
+                        if (newFindings.trim().length > 20) {
+                          try {
+                            debouncedSuggestStudyType(newFindings)
+                          } catch (error) {
+                            console.log('Auto-suggest error:', error)
+                          }
+                        }
+                      }}
+                      disabled={gptLoading || agentLoading}
+                      style={{
+                        width: '100%',
+                        height: '40vh',
+                        minHeight: 200,
+                        maxHeight: '50vh',
+                        padding: '16px 40px 16px 16px',
+                        backgroundColor: 'transparent',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 16,
+                        outline: 'none',
+                        resize: 'none',
+                        fontSize: 14,
+                        fontFamily: 'DM Sans, sans-serif',
+                        lineHeight: '1.6',
+                        whiteSpace: 'pre-wrap',
+                        wordWrap: 'break-word'
+                      }}
+                    />
+                  )}
+
+
+                  {/* Dictation Button */}
+                  <button
+                    onClick={handleDictationToggle}
+                    style={{
+                      position: 'absolute',
+                      top: findings ? 54 : 16,
+                      right: 16,
+                      background: isRecording ? 'rgba(227, 103, 86, 0.2)' : 'rgba(58, 188, 150, 0.1)',
+                      backdropFilter: 'blur(6px)',
+                      WebkitBackdropFilter: 'blur(6px)',
+                      color: isRecording ? '#E36756' : '#3ABC96',
+                      border: `1px solid ${isRecording ? 'rgba(227, 103, 86, 0.3)' : 'rgba(58, 188, 150, 0.2)'}`,
+                      borderRadius: '50%',
+                      width: 32,
+                      height: 32,
+                      fontSize: 16,
+                      fontWeight: 300,
+                      fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: 1,
+                      transition: 'all 0.2s ease',
+                      cursor: 'pointer',
+                      boxShadow: isRecording ? 
+                        '0 2px 6px rgba(227, 103, 86, 0.3), 0 0 10px rgba(227, 103, 86, 0.2)' : 
+                        '0 1px 3px rgba(58, 188, 150, 0.2)',
+                      animation: isRecording ? 'pulse 1.5s infinite' : 'none'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (isRecording) {
+                        e.currentTarget.style.background = 'rgba(227, 103, 86, 0.3)'
+                        e.currentTarget.style.borderColor = 'rgba(227, 103, 86, 0.4)'
+                        e.currentTarget.style.boxShadow = '0 3px 8px rgba(227, 103, 86, 0.4), 0 0 15px rgba(227, 103, 86, 0.3)'
+                      } else {
+                        e.currentTarget.style.background = 'rgba(58, 188, 150, 0.2)'
+                        e.currentTarget.style.borderColor = 'rgba(58, 188, 150, 0.3)'
+                        e.currentTarget.style.boxShadow = '0 2px 6px rgba(58, 188, 150, 0.3)'
+                      }
+                      e.currentTarget.style.transform = 'scale(1.1)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = isRecording ? 'rgba(227, 103, 86, 0.2)' : 'rgba(58, 188, 150, 0.1)'
+                      e.currentTarget.style.borderColor = isRecording ? 'rgba(227, 103, 86, 0.3)' : 'rgba(58, 188, 150, 0.2)'
+                      e.currentTarget.style.transform = 'scale(1)'
+                      e.currentTarget.style.boxShadow = isRecording ? 
+                        '0 2px 6px rgba(227, 103, 86, 0.3), 0 0 10px rgba(227, 103, 86, 0.2)' : 
+                        '0 1px 3px rgba(58, 188, 150, 0.2)'
+                    }}
+                    aria-label={isRecording ? "Stop dictation" : "Start dictation"}
+                    title={isRecording ? "Stop dictation" : "Start dictation"}
+                  >
+                    🎙️
+                  </button>
+
+
+                  {findings && (
+                    <button
+                      onClick={() => {
+                        setFindings('')
+                        setGenerationResult(null) // Exit diff view mode when clearing
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: 16,
+                        right: 16,
+                        background: 'transparent',
+                        color: '#E36756',
+                        border: 'none',
+                        fontSize: 14,
+                        fontWeight: 300,
+                        fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                        /* cursor removed */
+                        padding: 0,
+                        lineHeight: 1,
+                        transition: 'transform 0.2s ease',
+                      }}
+                      className={styles.clearButton}
+                      aria-label="Clear findings"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Dictation Error Display */}
+              {dictationError && (
+                <div style={{
+                  padding: '8px 12px',
+                  margin: '8px 0',
+                  backgroundColor: 'rgba(227, 103, 86, 0.1)',
+                  border: '1px solid rgba(227, 103, 86, 0.3)',
+                  borderRadius: '8px',
+                  color: '#E36756',
+                  fontSize: '12px',
+                  fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  textAlign: 'center'
+                }}>
+                  ⚠️ {dictationError}
+                  <button
+                    onClick={() => setDictationError(null)}
+                    style={{
+                      marginLeft: '8px',
+                      background: 'none',
+                      border: 'none',
+                      color: '#E36756',
+                      fontSize: '12px',
+                      padding: 0
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              {/* Cleanup Error Display */}
+              {cleanupError && (
+                <div style={{
+                  padding: '8px 12px',
+                  margin: '8px 0',
+                  backgroundColor: 'rgba(227, 103, 86, 0.1)',
+                  border: '1px solid rgba(227, 103, 86, 0.3)',
+                  borderRadius: '8px',
+                  color: '#E36756',
+                  fontSize: '12px',
+                  fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  textAlign: 'center'
+                }}>
+                  🧠 {cleanupError}
+                  <button
+                    onClick={() => setCleanupError(null)}
+                    style={{
+                      marginLeft: '8px',
+                      background: 'none',
+                      border: 'none',
+                      color: '#E36756',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      padding: '2px 4px',
+                      borderRadius: '4px'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              {/* Auto-cleanup indicator */}
+              {isAutoCleaningUp && (
+                <div style={{
+                  padding: '8px 12px',
+                  margin: '8px 0',
+                  backgroundColor: 'rgba(95, 51, 255, 0.1)',
+                  border: '1px solid rgba(95, 51, 255, 0.3)',
+                  borderRadius: '8px',
+                  color: '#7C5AFF',
+                  fontSize: '12px',
+                  fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                  textAlign: 'center',
+                  animation: 'pulse 1.5s infinite'
+                }}>
+                  🧠 Auto-cleaning up text...
+                </div>
+              )}
+
+              {/* Generation Result Actions - Only for report generation */}
+              {generationResult && generationResult.type === 'report' && (
+                <div style={{
+                  display: 'flex',
+                  gap: '8px',
+                  marginBottom: '16px',
+                  justifyContent: 'center',
+                  flexWrap: 'wrap'
+                }}>
+                  <BlurCard>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(findings)}
+                      style={{
+                        background: 'rgba(58, 188, 150, 0.2)',
+                        border: '1px solid rgba(58, 188, 150, 0.3)',
+                        borderRadius: '8px',
+                        color: '#3ABC96',
+                        cursor: 'pointer',
+                        padding: '8px 16px',
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}
+                    >
+                      ↗ Copy to Clipboard
+                    </button>
+                  </BlurCard>
+
+                  <BlurCard>
+                    <button
+                      onClick={() => setShowAskAI(true)}
+                      style={{
+                        background: 'rgba(59, 130, 246, 0.2)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: '8px',
+                        color: '#3B82F6',
+                        cursor: 'pointer',
+                        padding: '8px 16px',
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}
+                    >
+                      💬 Ask AI
+                    </button>
+                  </BlurCard>
+
+                  <BlurCard>
+                    <button
+                      onClick={() => {
+                        if (!generationResult) {
+                          console.log('❌ No generation result for strikeout removal');
+                          return;
+                        }
+                        
+                        console.log('🔍 Starting strikeout removal...');
+                        console.log('🔍 Using pre-calculated diff parts count:', generationResult.diffParts?.length);
+                        
+                        // Use pre-calculated diff parts and filter out removed parts
+                        const cleanText = generationResult.diffParts
+                          ?.filter(part => !part.removed) // Keep only non-removed parts
+                          .map(part => part.value)
+                          .join('')
+                          .trim() || '';
+                        
+                        console.log('🔍 Clean text length:', cleanText.length);
+                        console.log('🔍 Clean text preview:', cleanText.substring(0, 100));
+                        
+                        setFindings(cleanText);
+                        
+                        // Update diff parts to remove strikeouts but keep green highlights (just like old popup)
+                        const updatedDiffParts = generationResult.diffParts
+                          ?.filter(part => !part.removed) // Remove all strikeout parts
+                          .map(part => ({
+                            ...part,
+                            removed: false // Ensure no parts are marked as removed
+                          })) || [];
+                        
+                        setGenerationResult({
+                          ...generationResult,
+                          diffParts: updatedDiffParts
+                        });
+                        
+                        // Force a small delay to ensure the diff view updates
+                        setTimeout(() => {
+                          console.log('✅ Strikeout removal completed');
+                        }, 100);
+                      }}
+                      style={{
+                        background: 'rgba(227, 103, 86, 0.2)',
+                        border: '1px solid rgba(227, 103, 86, 0.3)',
+                        borderRadius: '8px',
+                        color: '#E36756',
+                        cursor: 'pointer',
+                        padding: '8px 16px',
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}
+                    >
+                      ✂ Remove Strikeout
+                    </button>
+                  </BlurCard>
+
+
+                </div>
+              )}
+
+              {/* Generation Status - Always Visible */}
+              <div style={{
+                marginBottom: '16px',
+                padding: '12px',
+                backgroundColor: agentLoading || gptLoading ? 
+                  'rgba(88, 166, 255, 0.1)' : 
+                  generationResult ? 
+                    'rgba(58, 188, 150, 0.1)' : 
+                    'rgba(255, 255, 255, 0.05)',
+                border: agentLoading || gptLoading ? 
+                  '1px solid rgba(88, 166, 255, 0.2)' : 
+                  generationResult ? 
+                    '1px solid rgba(58, 188, 150, 0.2)' : 
+                    '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px',
+                fontSize: '12px',
+                color: agentLoading || gptLoading ? 
+                  '#58A6FF' : 
+                  generationResult ? 
+                    '#3ABC96' : 
+                    '#999',
+                textAlign: 'center',
+                fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                transition: 'all 0.3s ease'
+              }}>
+                {agentLoading ? (
+                  <div>
+                    <div style={{ marginBottom: '4px' }}>
+                      <strong>🔄 Generating Report...</strong>
+                    </div>
+                    <div style={{ opacity: 0.8 }}>
+                      Processing findings with AI logic
+                    </div>
+                  </div>
+                ) : gptLoading ? (
+                  <div>
+                    <div style={{ marginBottom: '4px' }}>
+                      <strong>💭 Generating Impression...</strong>
+                    </div>
+                    <div style={{ opacity: 0.8 }}>
+                      Creating clinical impression
+                    </div>
+                  </div>
+                ) : generationResult ? (
+                  <div>
+                    <div style={{ marginBottom: '4px' }}>
+                      <strong>{generationResult.type === 'report' ? '📄 Report' : '💭 Impression'} Generated</strong>
+                    </div>
+                    <div style={{ opacity: 0.8 }}>
+                      ⏱ {generationResult.generationTime}s • 
+                      🎯 {generationResult.tokens.total} tokens 
+                      ({generationResult.tokens.input} in, {generationResult.tokens.output} out)
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ marginBottom: '4px' }}>
+                      <strong>⚡ Ready to Generate</strong>
+                    </div>
+                    <div style={{ opacity: 0.8 }}>
+                      Click Report or Impression to begin
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div
+                className="button-row"
+                style={{
+                  marginBottom: 0,
+                  transition: 'margin-bottom 0.3s ease',
+                  gap: 16
+                }}
+              >
+                <button
+                  onClick={handleGenerate}
+                  disabled={gptLoading || templatesLoading}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'linear-gradient(135deg, #3ABC96 0%, #2a9b7a 100%)',
+                    backdropFilter: 'blur(12px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 16,
+                    fontSize: 14,
+                    fontWeight: 300,
+                    fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                    color: '#FFFFFF',
+                    boxShadow: '0 4px 12px rgba(58, 188, 150, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
+                    width: 120,
+                    opacity: gptLoading || templatesLoading ? 0.5 : 1,
+                    pointerEvents: gptLoading || templatesLoading ? 'none' : 'auto',
+                    transition: 'all 0.2s ease',
+                    transform: 'translateY(0)',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!gptLoading && !templatesLoading) {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, #2a9b7a 0%, #238463 100%)'
+                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)'
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(58, 188, 150, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!gptLoading && !templatesLoading) {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, #3ABC96 0%, #2a9b7a 100%)'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(58, 188, 150, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                    }
+                  }}
+                >
+                  Report
+                </button>
+                
+                <button
+                  onClick={handleGenerateImpression}
+                  disabled={gptLoading || templatesLoading}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'linear-gradient(135deg, #3ABC96 0%, #2a9b7a 100%)',
+                    backdropFilter: 'blur(12px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 16,
+                    fontSize: 14,
+                    fontWeight: 300,
+                    fontFamily: 'SF Pro, -apple-system, BlinkMacSystemFont, sans-serif',
+                    color: '#FFFFFF',
+                    boxShadow: '0 4px 12px rgba(58, 188, 150, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
+                    width: 120,
+                    opacity: gptLoading || templatesLoading ? 0.5 : 1,
+                    pointerEvents: gptLoading || templatesLoading ? 'none' : 'auto',
+                    transition: 'all 0.2s ease',
+                    transform: 'translateY(0)',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!gptLoading && !templatesLoading) {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, #2a9b7a 0%, #238463 100%)'
+                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)'
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(58, 188, 150, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!gptLoading && !templatesLoading) {
+                      e.currentTarget.style.background = 'linear-gradient(135deg, #3ABC96 0%, #2a9b7a 100%)'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(58, 188, 150, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                    }
+                  }}
+                >
+                  Impression
+                </button>
+              </div>
+
+              {/* Debug panel */}
+              {showDebug && (
+                <div className="card">
+                  <h3>🧠 Prompt Sent to GPT:</h3>
+                  <pre>{debugPrompt}</pre>
+                  <h3>📥 Raw GPT Response:</h3>
+                  <pre>{debugResult}</pre>
+                </div>
+              )}
+
+              {/* Color scheme toggle removed - using single theme */}
+
+            <DictationModal
+              visible={showDictationModal}
+              selected={selectedDictation}
+              onSelect={(value) => {
+                setSelectedDictation(value)
+                localStorageCache.setItem('dictationTarget', value)
+                window?.electron?.ipcRenderer?.invoke('set-dictation-target', value)
+              }}
+              onClose={() => {
+                setShowDictationModal(false)
+                // Only activate auto-pull if it's not already active
+                if (!autoFindings) {
+                  setAutoFindings(true)
+                  localStorageCache.setItem('autoFindings', 'true')
+                  window?.electron?.ipcRenderer?.send('resize-main-ui', true)
+                }
+              }}
+              onCancel={() => {
+                setShowDictationModal(false)
+                // Don't change autoFindings state or trigger window resize
+                // Just close the modal and maintain current state
+              }}
+            />
+
+            <ShortcutManager
+              visible={showShortcutManager}
+              onClose={() => setShowShortcutManager(false)}
+            />
+            
+            
+          </div>
+        )}
+
+        {/* Contracted State - Show topbar with mini buttons and dropdown settings */}
+        {isContracted && (
+          <div 
+            style={{
+              height: '50px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0 16px',
+              boxSizing: 'border-box',
+              overflow: 'visible',
+              position: 'relative'
+            }}
+          >
+            {/* Draggable Area for Contracted State */}
+            <div 
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 80,
+                right: 160,
+                height: 50,
+                WebkitAppRegion: 'drag',
+                zIndex: 999
+              }}
+              onDoubleClick={(e) => e.preventDefault()}
+            />
+
+            {/* Left Side: Mini Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', WebkitAppRegion: 'no-drag', zIndex: 1002 }}>
+              {/* Mini Report Button */}
+              <button
+                className="radpal-button-report radpal-button-mini"
+                onClick={handleGenerate}
+                disabled={gptLoading || templatesLoading}
+                style={{
+                  padding: '2px 6px',
+                  fontSize: 11,
+                  lineHeight: 1.1,
+                  color: '#fff',
+                  fontFamily: 'SF Pro, system-ui, sans-serif',
+                  fontWeight: 400,
+                  opacity: gptLoading || templatesLoading ? 0.5 : 1,
+                  pointerEvents: gptLoading || templatesLoading ? 'none' : 'auto'
+                }}
+              >
+                Report
+              </button>
+
+              {/* Mini Impression Button */}
+              <button
+                className="radpal-button-impression radpal-button-mini"
+                onClick={handleGenerateImpression}
+                disabled={gptLoading || templatesLoading}
+                style={{
+                  padding: '2px 6px',
+                  fontSize: 11,
+                  lineHeight: 1.1,
+                  color: '#fff',
+                  fontFamily: 'SF Pro, system-ui, sans-serif',
+                  fontWeight: 400,
+                  opacity: gptLoading || templatesLoading ? 0.5 : 1,
+                  pointerEvents: gptLoading || templatesLoading ? 'none' : 'auto'
+                }}
+              >
+                Impression
+              </button>
+            </div>
+
+            {/* Right Side: Window Controls */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', WebkitAppRegion: 'no-drag', zIndex: 1002 }}>
+              <button
+                onClick={handleExpand}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: 16,
+                  padding: '4px 10px',
+                  color: '#ccc',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'
+                  e.currentTarget.style.color = '#fff'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                  e.currentTarget.style.boxShadow = '0 3px 6px rgba(0, 0, 0, 0.15)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+                  e.currentTarget.style.color = '#ccc'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+                }}
+              >
+                +
+              </button>
+              <button
+                onClick={handleMinimize}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: 16,
+                  padding: '4px 10px',
+                  color: '#ccc',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'
+                  e.currentTarget.style.color = '#fff'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                  e.currentTarget.style.boxShadow = '0 3px 6px rgba(0, 0, 0, 0.15)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'
+                  e.currentTarget.style.color = '#ccc'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)'
+                }}
+              >
+                –
+              </button>
+              <button
+                onClick={handleClose}
+                style={{
+                  background: 'linear-gradient(135deg, #E36756 0%, #c85545 100%)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 16,
+                  padding: '4px 10px',
+                  color: '#fff',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 6px rgba(227, 103, 86, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #c85545 0%, #b04436 100%)'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                  e.currentTarget.style.boxShadow = '0 4px 8px rgba(227, 103, 86, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #E36756 0%, #c85545 100%)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow = '0 2px 6px rgba(227, 103, 86, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+                }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Sidebar - Always available in both contracted and normal states */}
+        {showSettingsSidebar && (
+          <>
+            <div 
+              className={`settings-sidebar-overlay ${showSettingsSidebar ? 'open' : ''}`}
+              onClick={() => setShowSettingsSidebar(false)}
+            />
+            <div className={`settings-sidebar ${showSettingsSidebar ? 'open' : ''}`}>
+              <div className="settings-sidebar-header">
+                <h2 className="settings-sidebar-title">Settings</h2>
+                <button
+                  className="settings-sidebar-close"
+                  onClick={() => setShowSettingsSidebar(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="settings-sidebar-content">
+                <button 
+                  className="settings-sidebar-item"
+                  onClick={() => {
+                    window.electron?.ipcRenderer?.send('open-popup-templates', { isOfflineMode });
+                  }}
+                >
+                  ※ Manage Templates
+                </button>
+                <button 
+                  className="settings-sidebar-item"
+                  onClick={() => {
+                    setShowLogicEditor(true);
+                    setShowSettingsSidebar(false);
+                  }}
+                >
+                  ⚡ Edit Logic
+                </button>
+                
+                {/* Backup & Restore Section */}
+                <div className="settings-sidebar-section" style={{ marginTop: '20px', marginBottom: '10px' }}>
+                  <h3 className="settings-sidebar-section-title" style={{
+                    margin: '0 0 12px 0',
+                    padding: '8px 16px',
+                    textAlign: 'center',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif"
+                  }}>
+                    Backup & Restore
+                  </h3>
+                  <button 
+                    className="settings-sidebar-item"
+                    onClick={handleViewOfflineData}
+                  >
+                    👁️ View Offline Data
+                  </button>
+                  <button 
+                    className="settings-sidebar-item"
+                    onClick={handleBackupData}
+                  >
+                    💾 Export Backup
+                  </button>
+                  <button 
+                    className="settings-sidebar-item"
+                    onClick={handleRestoreData}
+                  >
+                    📥 Import Backup
+                  </button>
+                </div>
+                
+                {/* Experimental Section */}
+                <div className="settings-sidebar-section" style={{ marginTop: '20px', marginBottom: '10px' }}>
+                  <h3 className="settings-sidebar-section-title" style={{
+                    margin: '0 0 12px 0',
+                    padding: '8px 16px',
+                    textAlign: 'center',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#FFA500',
+                    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                    borderRadius: '8px',
+                    fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif"
+                  }}>
+                    🧪 Experimental
+                  </h3>
+                  <button 
+                    className={`settings-sidebar-item ${autoFindings ? 'active' : ''}`}
+                    onClick={() => {
+                      if (autoFindings) {
+                        setAutoFindings(false);
+                        localStorageCache.setItem('autoFindings', 'false');
+                        window?.electron?.ipcRenderer?.send('resize-main-ui', false);
+                      } else {
+                        setShowDictationModal(true);
+                      }
+                    }}
+                  >
+                    ↻ Auto-pull
+                  </button>
+                  <button 
+                    className="settings-sidebar-item"
+                    onClick={() => {
+                      setShowShortcutManager(true);
+                    }}
+                  >
+                    ⌨️ Keyboard Shortcuts
+                  </button>
+                  <button 
+                    className={`settings-sidebar-item ${isOfflineMode ? 'active' : ''}`}
+                    onClick={() => {
+                      const newMode = !isOfflineMode;
+                      setIsOfflineMode(newMode);
+                      localStorage.setItem('radpal_offline_mode', newMode.toString());
+                      showNotification(newMode ? '🔌 Offline mode enabled' : '🌐 Online mode enabled');
+                    }}
+                  >
+                    {isOfflineMode ? '🔌 Offline Mode' : '🌐 Online Mode'}
+                  </button>
+                </div>
+                <button 
+                  className="settings-sidebar-item danger"
+                  onClick={() => {
+                    handleSettingsAction('logout');
+                  }}
+                >
+                  → Log Out
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Debug Panel - only show when debug is active */}
+        {showDebug && (
+          <div style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            background: 'rgba(20, 20, 20, 0.95)',
+            border: '1px solid #333',
+            borderRadius: 8,
+            padding: '12px',
+            color: '#fff',
+            fontSize: 12,
+            maxWidth: 300,
+            zIndex: 10000
+          }}>
+            <div>API Provider: {apiProvider}</div>
+            <div>Window Size: {windowWidth}px</div>
+            <div>User: {user?.email || 'Not logged in'}</div>
+            <div>Templates Loading: {templatesLoading ? 'Yes' : 'No'}</div>
+            <div>GPT Loading: {gptLoading ? 'Yes' : 'No'}</div>
+            <div>Contracted: {isContracted ? 'Yes' : 'No'}</div>
+          </div>
+        )}
+
+        {/* Modal Components */}
+        {!isContracted && (
+          <>
+            <DictationModal
+              visible={showDictationModal}
+              selected={selectedDictation}
+              onSelect={(value) => {
+                setSelectedDictation(value)
+                localStorageCache.setItem('dictationTarget', value)
+                window?.electron?.ipcRenderer?.invoke('set-dictation-target', value)
+              }}
+              onClose={() => {
+                setShowDictationModal(false)
+                // Only activate auto-pull if it's not already active
+                if (!autoFindings) {
+                  setAutoFindings(true)
+                  localStorageCache.setItem('autoFindings', 'true')
+                  window?.electron?.ipcRenderer?.send('resize-main-ui', true)
+                }
+              }}
+              onCancel={() => {
+                setShowDictationModal(false)
+                // Don't change autoFindings state or trigger window resize
+                // Just close the modal and maintain current state
+              }}
+            />
+
+            <ShortcutManager
+              visible={showShortcutManager}
+              onClose={() => setShowShortcutManager(false)}
+            />
+
+            {/* Offline Data Viewer Modal */}
+            {showOfflineDataViewer && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.4)',
+                backdropFilter: 'blur(4px)',
+                WebkitBackdropFilter: 'blur(4px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 9999
+              }}>
+                <div style={{
+                  width: '90%',
+                  maxWidth: '800px',
+                  height: '80%',
+                  backgroundColor: 'rgba(42, 45, 49, 0.95)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  borderRadius: 16,
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden'
+                }}>
+                  {/* Header */}
+                  <div style={{
+                    padding: '20px 24px',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <h2 style={{
+                      margin: 0,
+                      color: '#fff',
+                      fontSize: '20px',
+                      fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
+                      fontWeight: 600
+                    }}>
+                      Offline Data Viewer
+                    </h2>
+                    <button
+                      onClick={() => setShowOfflineDataViewer(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '24px',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        borderRadius: '4px',
+                        lineHeight: 1
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  {/* Content */}
+                  <div style={{
+                    flex: 1,
+                    padding: '20px 24px',
+                    overflow: 'auto',
+                    color: '#fff',
+                    fontFamily: "'JetBrains Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace",
+                    fontSize: '13px',
+                    lineHeight: '1.5'
+                  }}>
+                    <pre style={{
+                      margin: 0,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word'
+                    }}>
+                      {JSON.stringify(offlineStorage.exportOfflineData(), null, 2)}
+                    </pre>
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{
+                    padding: '16px 24px',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      fontSize: '12px',
+                      fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif"
+                    }}>
+                      Last sync: {offlineStorage.getLastSync()?.toLocaleString() || 'Never'}
+                    </span>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(JSON.stringify(offlineStorage.exportOfflineData(), null, 2))
+                          showNotification('📋 Copied to clipboard!')
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          backgroundColor: '#3b82f6',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
+                          fontWeight: 500,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        📋 Copy JSON
+                      </button>
+                      <button
+                        onClick={() => {
+                          offlineStorage.clearAll()
+                          showNotification('🗑️ All offline data cleared!')
+                          setShowOfflineDataViewer(false)
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          backgroundColor: '#dc2626',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
+                          fontWeight: 500,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🗑️ Clear All
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Logic Editor Direct Modal */}
+        {showLogicEditor && user?.id && (
+          <>
+            {console.log('🎯 Rendering LogicEditorDirect with:', { userId: user.id, studyType: selectedStudyType, showLogicEditor })}
+            <LogicEditorDirect
+              userId={user.id}
+              studyType={selectedStudyType || ''}
+              templates={templates}
+              onClose={() => setShowLogicEditor(false)}
+              isOfflineMode={isOfflineMode}
+            />
+          </>
+        )}
+
+        {/* Ask AI Modal */}
+        {showAskAI && user?.id && generationResult && (
+          <AskAI
+            userId={user.id}
+            studyType={selectedStudyType || ''}
+            reportText={findings}
+            reportId={undefined}
+            sessionId={undefined}
+            onClose={() => setShowAskAI(false)}
+          />
+        )}
+
+        {/* Bottom Message Box */}
+        {notification && (
+          <div style={{
+            position: 'fixed',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(58, 188, 150, 0.9)',
+            color: 'white',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            zIndex: 10000,
+            fontSize: '14px',
+            fontWeight: '500',
+            maxWidth: '400px',
+            textAlign: 'center',
+            pointerEvents: 'none', // Don't steal focus
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(58, 188, 150, 0.3)'
+          }}>
+            {notification}
+          </div>
+        )}
+      </div>
+    </div>
+  ))
+})

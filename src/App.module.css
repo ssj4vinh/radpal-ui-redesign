@@ -1,0 +1,418 @@
+/* Button styles with CSS hover states */
+.primaryButton {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #3ABC96 0%, #2a9b7a 100%);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 300;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(58, 188, 150, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  width: 120px;
+  transition: all 0.2s ease;
+  transform: translateY(0);
+  cursor: pointer;
+  will-change: transform;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2a9b7a 0%, #238463 100%);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 16px rgba(58, 188, 150, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(58, 188, 150, 0.1);
+}
+
+.clearButton {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(227, 103, 86, 0.1);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #E36756;
+  border: 1px solid rgba(227, 103, 86, 0.2);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  font-weight: 300;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(227, 103, 86, 0.2);
+}
+
+.clearButton:hover {
+  background: rgba(227, 103, 86, 0.2);
+  border-color: rgba(227, 103, 86, 0.3);
+  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(227, 103, 86, 0.3);
+  color: #ff5544;
+}
+
+.apiButton {
+  padding: 6px 12px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 300;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.apiButton.active {
+  background: linear-gradient(135deg, #5F33FF 0%, #4a28cc 100%);
+  color: #fff;
+  text-shadow: none;
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 6px rgba(95, 51, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.apiButton:not(.active) {
+  background: rgba(255, 255, 255, 0.03);
+  background: linear-gradient(to bottom, #ffffff, #999999, #333333);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+}
+
+.apiButton:not(.active):hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* Settings button - glassmorphism restored */
+.settingsButton {
+  position: absolute;
+  top: 20px;
+  left: 16px;
+  background: rgba(42, 45, 49, 0.8);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: #fff;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  z-index: 1002;
+  font-size: 14px;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.settingsButton:hover {
+  background: rgba(58, 61, 65, 0.85);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Settings sidebar optimization */
+.settingsSidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100%;
+  background-color: #1a1d23;
+  transform: translateX(320px);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10001;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.settingsSidebar.open {
+  transform: translateX(0);
+}
+
+.settingsSidebarOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: background-color 0.2s ease;
+  z-index: 10000;
+}
+
+.settingsSidebarOverlay.open {
+  background-color: rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+}
+
+/* Impression button optimization */
+.impressionButton {
+  padding: 10px 20px;
+  background-color: #3ABC96;
+  border: none;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 300;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #FFFFFF;
+  box-shadow: none;
+  width: 120px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  transform: scale(1);
+  cursor: pointer;
+  will-change: transform;
+}
+
+.impressionButton:hover:not(:disabled) {
+  background-color: #2a9b7a;
+  transform: scale(1.05);
+}
+
+.impressionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Window control buttons */
+.windowControlButton {
+  background: transparent;
+  border: none;
+  border-radius: 16px;
+  padding: 4px 10px;
+  color: #ccc;
+  z-index: 1002;
+  transition: background-color 0.2s ease;
+}
+
+.windowControlButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.windowControlButtonClose {
+  background: #E36756;
+  border: none;
+  border-radius: 16px;
+  padding: 4px 10px;
+  color: #fff;
+  z-index: 1002;
+  transition: background-color 0.2s ease;
+}
+
+.windowControlButtonClose:hover {
+  background: #c85545;
+}
+
+/* Contracted state mini buttons */
+.contractedButton {
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 300;
+  font-family: 'SF Pro', system-ui, sans-serif;
+  transition: all 0.2s ease;
+  background: transparent;
+  color: #ccc;
+}
+
+.contractedButton.active {
+  background-color: #5F33FF;
+  color: #fff;
+}
+
+.contractedButton:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Draggable area optimization */
+.draggableArea {
+  position: absolute;
+  top: 5px;
+  left: 60px;
+  right: 100px;
+  height: 30px;
+  -webkit-app-region: drag;
+  z-index: 999;
+}
+
+.draggableAreaContracted {
+  position: absolute;
+  top: 0;
+  left: 140px;
+  right: 160px;
+  height: 50px;
+  -webkit-app-region: drag;
+  z-index: 999;
+}
+
+/* Impression button - glassmorphism restored */
+.impressionButton {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #3ABC96 0%, #2a9b7a 100%);
+  backdrop-filter: blur(12px) saturate(130%);
+  -webkit-backdrop-filter: blur(12px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 300;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(58, 188, 150, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  width: 120px;
+  transition: all 0.2s ease;
+  transform: translateY(0);
+  cursor: pointer;
+  will-change: transform;
+}
+
+.impressionButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2a9b7a 0%, #238463 100%);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 16px rgba(58, 188, 150, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.impressionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(58, 188, 150, 0.1);
+}
+
+/* Window control buttons - glassmorphism restored */
+.windowControlButton {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 4px 10px;
+  color: #ccc;
+  z-index: 1002;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.windowControlButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+.windowControlButtonClose {
+  background: linear-gradient(135deg, #E36756 0%, #c85545 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 4px 10px;
+  color: #fff;
+  z-index: 1002;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(227, 103, 86, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.windowControlButtonClose:hover {
+  background: linear-gradient(135deg, #c85545 0%, #b04436 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(227, 103, 86, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Contracted state mini buttons - glassmorphism restored */
+.contractedButton {
+  padding: 2px 4px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 300;
+  font-family: 'SF Pro', system-ui, sans-serif;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.03);
+  color: #ccc;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.contractedButton.active {
+  background: linear-gradient(135deg, #5F33FF 0%, #4a28cc 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 4px rgba(95, 51, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.contractedButton:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* Daily tokens status bar - glassmorphism restored */
+.tokenStatusBar {
+  background: rgba(42, 45, 49, 0.6);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+}
+
+.tokenStatusBar:hover {
+  background: rgba(42, 45, 49, 0.7);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.tokenProgressBar {
+  background: rgba(42, 45, 49, 0.6);
+  border-radius: 6px;
+  border: none;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.tokenProgressFill {
+  transition: all 0.3s ease;
+  border-radius: 6px 0 0 6px;
+  box-shadow: 0 0 8px rgba(58, 188, 150, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Spinner animation for auto-suggest loading */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}

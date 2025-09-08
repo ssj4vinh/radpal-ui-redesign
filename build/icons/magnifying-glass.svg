@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle for better visibility -->
+  <rect width="256" height="256" fill="white" rx="48"/>
+  
+  <!-- Magnifying glass circle -->
+  <circle 
+    cx="117" 
+    cy="117" 
+    r="75" 
+    stroke="url(#purpleGradient)" 
+    stroke-width="16"
+    fill="none"
+  />
+  
+  <!-- Magnifying glass handle -->
+  <path 
+    d="M170 170L213 213" 
+    stroke="url(#purpleGradient)" 
+    stroke-width="16" 
+    stroke-linecap="round"
+  />
+  
+  <!-- Inner reflection for glass effect -->
+  <path 
+    d="M85 85C85 85 96 64 117 64C138 64 149 75 149 75" 
+    stroke="url(#purpleGradient)" 
+    stroke-width="12" 
+    opacity="0.6" 
+    stroke-linecap="round"
+    fill="none"
+  />
+  
+  <!-- Define purple gradient -->
+  <defs>
+    <linearGradient id="purpleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>

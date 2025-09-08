@@ -1,0 +1,10 @@
+# Text-to-Speech and Audio Processing
+elevenlabs
+
+# Optional: If you want to include other audio processing libraries
+# soundfile
+# librosa
+# numpy
+
+# General utilities
+requests

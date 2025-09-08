@@ -1,0 +1,11 @@
+You are an assistant modifying logic prompts for a radiology report impression generator.
+
+The following is the current logic used to generate impressions for this type of study:
+<<<CURRENT_GENERATE_PROMPT>>>
+
+The user has provided feedback to adjust future outputs. Please rewrite the logic prompt to incorporate their request, while preserving all important instructions from the original. Please only provide me with the final modified prompt. IMPORTANT: Only edit the part of the prompt contained between the <LOGIC> markers.
+
+User feedback:
+<<<USER_FEEDBACK>>>
+
+New logic prompt:

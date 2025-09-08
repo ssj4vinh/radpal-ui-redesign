@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Icon PNGs</title>
+</head>
+<body>
+    <h2>RadPal Icon Generator</h2>
+    <p>Right-click and save each icon:</p>
+    
+    <!-- 256x256 Icon -->
+    <h3>icon.png (256x256)</h3>
+    <canvas id="canvas256" width="256" height="256"></canvas>
+    
+    <!-- 512x512 Icon -->
+    <h3>icon_512x512.png</h3>
+    <canvas id="canvas512" width="512" height="512"></canvas>
+    
+    <!-- 32x32 Icon (for tray) -->
+    <h3>icon_32x32.png</h3>
+    <canvas id="canvas32" width="32" height="32"></canvas>
+    
+    <script>
+        function drawIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // White background with rounded corners
+            ctx.fillStyle = 'white';
+            const radius = size * 0.1875; // 48/256 ratio
+            ctx.beginPath();
+            ctx.moveTo(radius, 0);
+            ctx.lineTo(size - radius, 0);
+            ctx.quadraticCurveTo(size, 0, size, radius);
+            ctx.lineTo(size, size - radius);
+            ctx.quadraticCurveTo(size, size, size - radius, size);
+            ctx.lineTo(radius, size);
+            ctx.quadraticCurveTo(0, size, 0, size - radius);
+            ctx.lineTo(0, radius);
+            ctx.quadraticCurveTo(0, 0, radius, 0);
+            ctx.fill();
+            
+            // Create gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            // Scale factors
+            const scale = size / 256;
+            ctx.scale(scale, scale);
+            
+            // Draw magnifying glass circle
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = 16;
+            ctx.beginPath();
+            ctx.arc(117, 117, 75, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Draw handle
+            ctx.beginPath();
+            ctx.moveTo(170, 170);
+            ctx.lineTo(213, 213);
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            
+            // Draw reflection
+            ctx.globalAlpha = 0.6;
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            ctx.arc(117, 85, 32, Math.PI * 1.2, Math.PI * 1.8);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            
+            // Convert to PNG and create download link
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = canvasId.replace('canvas', 'icon_') + 'x' + size + '.png';
+                if (size === 256) link.download = 'icon.png';
+                link.textContent = ' [Download]';
+                canvas.parentNode.insertBefore(link, canvas.nextSibling);
+            });
+        }
+        
+        // Draw all icons
+        drawIcon('canvas256', 256);
+        drawIcon('canvas512', 512);
+        drawIcon('canvas32', 32);
+    </script>
+</body>
+</html>

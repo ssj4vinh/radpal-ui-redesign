@@ -1,0 +1,120 @@
+{
+  "name": "radpal",
+  "version": "1.0.12",
+  "description": "AI-powered radiology reporting assistant",
+  "author": "RadPal Team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ssj4vinh/radpalapp.git"
+  },
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron": "electron .",
+    "pack": "electron-builder --dir",
+    "prebuild": "node scripts/build-config.js",
+    "dist": "npm run prebuild && vite build && electron-builder",
+    "dist:win": "vite build && electron-builder --win",
+    "dist:mac": "vite build && electron-builder --mac",
+    "llama:build": "bash scripts/build-llamacpp-server.sh",
+    "llama:serve": "bash scripts/run-llamacpp-server.sh",
+    "llama:test": "node scripts/test-local-ai.js"
+  },
+  "build": {
+    "appId": "com.radpal.app",
+    "productName": "RadPal",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ssj4vinh",
+        "repo": "radpalapp"
+      }
+    ],
+    "asar": true,
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "electron/*.exe",
+      "electron/*.dll",
+      "preload.js",
+      "main.js",
+      "node_modules/**/*",
+      "package.json",
+      ".env"
+    ],
+    "extraResources": [
+      {
+        "from": "prompts",
+        "to": "prompts"
+      },
+      {
+        "from": "powerscribe_clip.exe",
+        "to": "powerscribe_clip.exe"
+      }
+    ],
+    "asarUnpack": [
+      "electron/RadPalHotkeys.exe",
+      "electron/RadPalHotkeys.ahk",
+      "electron/Ahk2Exe.exe",
+      "electron/Unicode 64-bit.bin"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RadPal",
+      "runAfterFinish": true,
+      "license": "LICENSE.txt",
+      "warningsAsErrors": false,
+      "differentialPackage": false,
+      "include": "build/installer.nsh"
+    },
+    "mac": {
+      "target": "dmg"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.12",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "dotenv": "^17.2.1",
+    "electron": "^25.9.8",
+    "electron-builder": "^24.13.3",
+    "vite": "^4.0.0"
+  },
+  "dependencies": {
+    "@radix-ui/react-dropdown-menu": "^2.1.15",
+    "@supabase/supabase-js": "^2.50.1",
+    "adm-zip": "^0.5.16",
+    "clipboardy": "^4.0.0",
+    "diff": "^8.0.2",
+    "diff-match-patch": "^1.0.5",
+    "electron-updater": "^6.6.2",
+    "lucide-react": "^0.534.0",
+    "mic": "^2.1.2",
+    "node-fetch": "^2.7.0",
+    "node-hid": "^3.2.0",
+    "node-record-lpcm16": "^1.0.1",
+    "openai": "^5.7.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "ws": "^8.18.3"
+  }
+}

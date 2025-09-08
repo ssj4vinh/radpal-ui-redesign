@@ -1,0 +1,53 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Impression Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #toolbar {
+      display: flex;
+      justify-content: flex-end;
+      padding: 10px;
+      background: #f0f0f0;
+    }
+    textarea {
+      flex: 1;
+      width: 100%;
+      font-size: 14px;
+      font-family: monospace;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="copy-btn">📋 Copy All</button>
+  </div>
+  <textarea id="editor"></textarea>
+
+  <script>
+    const editor = document.getElementById('editor');
+    const copyBtn = document.getElementById('copy-btn');
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(editor.value);
+    });
+
+    window.electronAPI?.onPopupContent(data => {
+      const resultText = typeof data === 'object' && data.result ? data.result : (typeof data === 'string' ? data : '');
+      editor.value = resultText;
+    });
+
+    window.opener?.postMessage('ready', '*');
+  </script>
+</body>
+</html>

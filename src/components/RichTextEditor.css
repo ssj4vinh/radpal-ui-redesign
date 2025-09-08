@@ -1,0 +1,124 @@
+.rich-text-editor-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.rich-text-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(30, 32, 36, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px 12px 0 0;
+}
+
+.format-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.format-btn:hover {
+  background: rgba(88, 166, 255, 0.2);
+  border-color: rgba(88, 166, 255, 0.4);
+}
+
+.format-btn:active {
+  background: rgba(88, 166, 255, 0.3);
+  transform: scale(0.95);
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 4px;
+}
+
+.rich-text-editor {
+  flex: 1;
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+  color: #fff;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  font-family: 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  overflow-y: auto;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* Placeholder styling */
+.rich-text-editor:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  position: absolute;
+}
+
+/* Scrollbar styling */
+.rich-text-editor::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rich-text-editor::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.rich-text-editor::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.rich-text-editor::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Selection styling */
+.rich-text-editor::selection {
+  background: rgba(88, 166, 255, 0.3);
+  color: #fff;
+}
+
+.rich-text-editor ::-moz-selection {
+  background: rgba(88, 166, 255, 0.3);
+  color: #fff;
+}
+
+/* Strong/Bold text styling */
+.rich-text-editor strong {
+  font-weight: 700;
+  color: #58A6FF;
+}
+
+/* Italic text styling */
+.rich-text-editor em {
+  font-style: italic;
+}
+
+/* Underline text styling */
+.rich-text-editor u {
+  text-decoration: underline;
+}
+
+/* Ensure proper cursor behavior */
+.rich-text-editor br {
+  user-select: text;
+}

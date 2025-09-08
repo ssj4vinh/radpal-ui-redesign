@@ -1,0 +1,49 @@
+!macro customInit
+  # Kill any running RadPal processes before update
+  nsExec::Exec 'taskkill /F /IM RadPal.exe'
+  nsExec::Exec 'taskkill /F /IM radpal.exe'
+  nsExec::Exec 'taskkill /F /IM RadPalHotkeys.exe'
+  nsExec::Exec 'taskkill /F /IM llama-server.exe'
+  Pop $0
+!macroend
+
+!macro customInstallMode
+  # Force updates to restart the app after installation
+  ${if} ${isUpdated}
+    # Set flag to force app restart
+    StrCpy $launchAppAfterSilentInstall "1"
+  ${endif}
+!macroend
+
+!macro customUnInstall
+  # Kill any running RadPal processes during uninstall
+  nsExec::Exec 'taskkill /F /IM RadPal.exe'
+  nsExec::Exec 'taskkill /F /IM radpal.exe'
+  nsExec::Exec 'taskkill /F /IM RadPalHotkeys.exe'
+  nsExec::Exec 'taskkill /F /IM llama-server.exe'
+!macroend
+
+!macro customInstall
+  # Ensure app runs after silent install/update
+  ${if} ${isUpdated}
+    # Force run app after any update (silent or not)
+    WriteRegStr HKCU "Software\RadPal" "RestartAfterUpdate" "1"
+  ${endif}
+!macroend
+
+!macro customInstSuccess
+  # Force app restart after successful update installation
+  ${if} ${isUpdated}
+    # Always restart the app after an update
+    # Use Exec instead of ExecShell for better reliability
+    Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+  ${endif}
+!macroend
+
+# Also ensure app launches after installation for updates
+!macro customInstFinish
+  ${if} ${isUpdated}
+    # Launch app after finish page
+    Exec '"$INSTDIR\${APP_EXECUTABLE_FILENAME}"'
+  ${endif}
+!macroend
