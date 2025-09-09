@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Track login state
+let isLoggedIn = false;
+let currentSession = null;
+
 // Mock data
 const mockUser = {
   id: 'test-user-123',
@@ -62,65 +66,99 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Authentication
   authSignIn: (email, password) => {
     console.log('Mock sign in:', email);
-    // Return the exact structure the app expects
+    // Accept any email/password
+    isLoggedIn = true;
+    currentSession = { 
+      access_token: 'mock-token',
+      refresh_token: 'mock-refresh-token',
+      user: { ...mockUser, email: email || mockUser.email }
+    };
+    
     return Promise.resolve({ 
       data: {
-        user: mockUser, 
-        session: { 
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh-token',
-          user: mockUser
-        }
+        user: { ...mockUser, email: email || mockUser.email }, 
+        session: currentSession
       },
       error: null
     });
   },
   authSignUp: (email, password) => {
     console.log('Mock sign up:', email);
+    // Accept any email/password
+    isLoggedIn = true;
+    currentSession = { 
+      access_token: 'mock-token',
+      refresh_token: 'mock-refresh-token',
+      user: { ...mockUser, email: email || mockUser.email }
+    };
+    
     return Promise.resolve({ 
       data: {
-        user: mockUser, 
-        session: { 
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh-token',
-          user: mockUser
-        }
+        user: { ...mockUser, email: email || mockUser.email }, 
+        session: currentSession
       },
       error: null
     });
   },
   authSignOut: () => {
     console.log('Mock sign out');
+    isLoggedIn = false;
+    currentSession = null;
     return Promise.resolve({ error: null });
   },
-  authGetSession: () => Promise.resolve({ 
-    data: { 
-      session: { 
-        access_token: 'mock-token',
-        refresh_token: 'mock-refresh-token',
-        user: mockUser
-      }
-    },
-    error: null
-  }),
-  authGetUser: () => Promise.resolve({ 
-    data: { user: mockUser },
-    error: null
-  }),
+  authGetSession: () => {
+    console.log('Mock get session, logged in:', isLoggedIn);
+    if (!isLoggedIn) {
+      return Promise.resolve({ 
+        data: { session: null },
+        error: null
+      });
+    }
+    return Promise.resolve({ 
+      data: { session: currentSession },
+      error: null
+    });
+  },
+  authGetUser: () => {
+    if (!isLoggedIn) {
+      return Promise.resolve({ 
+        data: { user: null },
+        error: null
+      });
+    }
+    return Promise.resolve({ 
+      data: { user: currentSession?.user || mockUser },
+      error: null
+    });
+  },
   authSetupListener: () => Promise.resolve(),
   onAuthStateChange: (callback) => {
-    // Simulate auth state change after a brief delay
-    setTimeout(() => {
-      callback({ event: 'SIGNED_IN', session: { user: mockUser } });
-    }, 100);
+    // Don't auto-login - wait for actual login
+    // Return unsubscribe function
     return () => {};
   },
 
   // User & Session
-  setCurrentUser: (user) => Promise.resolve(),
-  getCurrentUser: () => Promise.resolve(mockUser),
-  setSupabaseSession: (session) => Promise.resolve(),
-  getSupabaseSession: () => Promise.resolve({ access_token: 'mock-token' }),
+  setCurrentUser: (user) => {
+    if (user) {
+      isLoggedIn = true;
+      currentSession = { ...currentSession, user };
+    }
+    return Promise.resolve();
+  },
+  getCurrentUser: () => {
+    return Promise.resolve(isLoggedIn ? (currentSession?.user || mockUser) : null);
+  },
+  setSupabaseSession: (session) => {
+    if (session) {
+      isLoggedIn = true;
+      currentSession = session;
+    }
+    return Promise.resolve();
+  },
+  getSupabaseSession: () => {
+    return Promise.resolve(isLoggedIn ? currentSession : null);
+  },
   
   // Templates
   fetchTemplates: () => Promise.resolve(mockTemplates),
