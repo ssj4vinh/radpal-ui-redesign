@@ -64,16 +64,20 @@ const mockReports = [
 // Mock API
 contextBridge.exposeInMainWorld('electronAPI', {
   // Authentication
-  authSignIn: (email, password) => {
+  authSignIn: async (email, password) => {
     console.log('🔐 Mock sign in:', email);
     // Accept any email/password
-    isLoggedIn = true;
     const signedInUser = { ...mockUser, email: email || mockUser.email };
     currentSession = { 
       access_token: 'mock-token',
       refresh_token: 'mock-refresh-token',
       user: signedInUser
     };
+    isLoggedIn = true;
+    
+    // Store the session globally so subsequent calls can access it
+    window.__mockSession = currentSession;
+    window.__mockIsLoggedIn = true;
     
     // Trigger window resize after successful login
     setTimeout(() => {
@@ -89,16 +93,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
       error: null
     });
   },
-  authSignUp: (email, password) => {
+  authSignUp: async (email, password) => {
     console.log('📝 Mock sign up:', email);
     // Accept any email/password
-    isLoggedIn = true;
     const signedUpUser = { ...mockUser, email: email || mockUser.email };
     currentSession = { 
       access_token: 'mock-token',
       refresh_token: 'mock-refresh-token',
       user: signedUpUser
     };
+    isLoggedIn = true;
+    
+    // Store the session globally
+    window.__mockSession = currentSession;
+    window.__mockIsLoggedIn = true;
     
     // Trigger window resize after successful signup
     setTimeout(() => {
@@ -115,34 +123,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
     });
   },
   authSignOut: () => {
-    console.log('Mock sign out');
+    console.log('🚪 Mock sign out');
     isLoggedIn = false;
     currentSession = null;
+    window.__mockIsLoggedIn = false;
+    window.__mockSession = null;
     return Promise.resolve({ error: null });
   },
   authGetSession: () => {
-    console.log('Mock get session, logged in:', isLoggedIn);
-    if (!isLoggedIn) {
+    // Check both local and global state
+    const loggedIn = isLoggedIn || window.__mockIsLoggedIn;
+    const session = currentSession || window.__mockSession;
+    
+    console.log('Mock get session, logged in:', loggedIn);
+    if (!loggedIn) {
       return Promise.resolve({ 
         data: { session: null },
         error: null
       });
     }
     return Promise.resolve({ 
-      data: { session: currentSession },
+      data: { session: session },
       error: null
     });
   },
   authGetUser: () => {
-    console.log('Mock get user, logged in:', isLoggedIn);
-    if (!isLoggedIn) {
+    // Check both local and global state
+    const loggedIn = isLoggedIn || window.__mockIsLoggedIn;
+    const session = currentSession || window.__mockSession;
+    
+    console.log('Mock get user, logged in:', loggedIn);
+    if (!loggedIn) {
       return Promise.resolve({ 
         data: { user: null },
         error: null
       });
     }
     return Promise.resolve({ 
-      data: { user: currentSession?.user || mockUser },
+      data: { user: session?.user || mockUser },
       error: null
     });
   },
@@ -162,7 +180,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve();
   },
   getCurrentUser: () => {
-    return Promise.resolve(isLoggedIn ? (currentSession?.user || mockUser) : null);
+    const loggedIn = isLoggedIn || window.__mockIsLoggedIn;
+    const session = currentSession || window.__mockSession;
+    return Promise.resolve(loggedIn ? (session?.user || mockUser) : null);
   },
   setSupabaseSession: (session) => {
     if (session) {
@@ -172,7 +192,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve();
   },
   getSupabaseSession: () => {
-    return Promise.resolve(isLoggedIn ? currentSession : null);
+    const loggedIn = isLoggedIn || window.__mockIsLoggedIn;
+    const session = currentSession || window.__mockSession;
+    return Promise.resolve(loggedIn ? session : null);
   },
   
   // Templates
