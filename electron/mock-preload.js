@@ -80,18 +80,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // Notify app of auth state change IMMEDIATELY
     if (authState.authCallback) {
-      console.log('🔔 Triggering auth state change callback IMMEDIATELY');
+      console.log('🔔 Triggering auth state change callback IMMEDIATELY with session:', authState.currentSession);
+      // Provide the complete auth state expected by Supabase
       authState.authCallback({ 
         event: 'SIGNED_IN', 
-        session: authState.currentSession 
+        session: {
+          access_token: authState.currentSession.access_token,
+          refresh_token: authState.currentSession.refresh_token,
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: authState.currentSession.user
+        }
       });
     }
     
-    // Then resize window
+    // Then resize window and trigger another auth update
     setTimeout(() => {
       console.log('📐 Triggering resize for main mode');
       ipcRenderer.send('resize-for-main-mode');
-    }, 50);
+      
+      // Send another auth state update to be sure
+      if (authState.authCallback && authState.isLoggedIn) {
+        console.log('🔔 Sending second auth state update');
+        authState.authCallback({ 
+          event: 'TOKEN_REFRESHED', 
+          session: {
+            access_token: authState.currentSession.access_token,
+            refresh_token: authState.currentSession.refresh_token,
+            expires_in: 3600,
+            token_type: 'bearer',
+            user: authState.currentSession.user
+          }
+        });
+      }
+    }, 100);
     
     return Promise.resolve({ 
       data: {
@@ -114,18 +136,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // Notify app of auth state change IMMEDIATELY
     if (authState.authCallback) {
-      console.log('🔔 Triggering auth state change callback IMMEDIATELY');
+      console.log('🔔 Triggering auth state change callback IMMEDIATELY with session:', authState.currentSession);
+      // Provide the complete auth state expected by Supabase
       authState.authCallback({ 
         event: 'SIGNED_IN', 
-        session: authState.currentSession 
+        session: {
+          access_token: authState.currentSession.access_token,
+          refresh_token: authState.currentSession.refresh_token,
+          expires_in: 3600,
+          token_type: 'bearer',
+          user: authState.currentSession.user
+        }
       });
     }
     
-    // Then resize window
+    // Then resize window and trigger another auth update
     setTimeout(() => {
       console.log('📐 Triggering resize for main mode');
       ipcRenderer.send('resize-for-main-mode');
-    }, 50);
+      
+      // Send another auth state update to be sure
+      if (authState.authCallback && authState.isLoggedIn) {
+        console.log('🔔 Sending second auth state update');
+        authState.authCallback({ 
+          event: 'TOKEN_REFRESHED', 
+          session: {
+            access_token: authState.currentSession.access_token,
+            refresh_token: authState.currentSession.refresh_token,
+            expires_in: 3600,
+            token_type: 'bearer',
+            user: authState.currentSession.user
+          }
+        });
+      }
+    }, 100);
     
     return Promise.resolve({ 
       data: {
