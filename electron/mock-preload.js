@@ -1,8 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Track login state
-let isLoggedIn = false;
-let currentSession = null;
+// Track login state - use a shared object to maintain state
+const authState = {
+  isLoggedIn: false,
+  currentSession: null,
+  authCallback: null
+};
 
 // Mock data
 const mockUser = {
@@ -68,16 +71,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     console.log('🔐 Mock sign in:', email);
     // Accept any email/password
     const signedInUser = { ...mockUser, email: email || mockUser.email };
-    currentSession = { 
+    authState.currentSession = { 
       access_token: 'mock-token',
       refresh_token: 'mock-refresh-token',
       user: signedInUser
     };
-    isLoggedIn = true;
-    
-    // Store the session globally so subsequent calls can access it
-    window.__mockSession = currentSession;
-    window.__mockIsLoggedIn = true;
+    authState.isLoggedIn = true;
     
     // Trigger auth state change callback
     setTimeout(() => {
@@ -85,11 +84,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.send('resize-for-main-mode');
       
       // Notify app of auth state change
-      if (window.__authStateChangeCallback) {
+      if (authState.authCallback) {
         console.log('🔔 Triggering auth state change callback');
-        window.__authStateChangeCallback({ 
+        authState.authCallback({ 
           event: 'SIGNED_IN', 
-          session: currentSession 
+          session: authState.currentSession 
         });
       }
     }, 100);
@@ -97,7 +96,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve({ 
       data: {
         user: signedInUser, 
-        session: currentSession
+        session: authState.currentSession
       },
       error: null
     });
@@ -106,16 +105,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     console.log('📝 Mock sign up:', email);
     // Accept any email/password
     const signedUpUser = { ...mockUser, email: email || mockUser.email };
-    currentSession = { 
+    authState.currentSession = { 
       access_token: 'mock-token',
       refresh_token: 'mock-refresh-token',
       user: signedUpUser
     };
-    isLoggedIn = true;
-    
-    // Store the session globally
-    window.__mockSession = currentSession;
-    window.__mockIsLoggedIn = true;
+    authState.isLoggedIn = true;
     
     // Trigger auth state change callback
     setTimeout(() => {
@@ -123,11 +118,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.send('resize-for-main-mode');
       
       // Notify app of auth state change
-      if (window.__authStateChangeCallback) {
+      if (authState.authCallback) {
         console.log('🔔 Triggering auth state change callback');
-        window.__authStateChangeCallback({ 
+        authState.authCallback({ 
           event: 'SIGNED_IN', 
-          session: currentSession 
+          session: authState.currentSession 
         });
       }
     }, 100);
@@ -135,22 +130,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve({ 
       data: {
         user: signedUpUser, 
-        session: currentSession
+        session: authState.currentSession
       },
       error: null
     });
   },
   authSignOut: () => {
     console.log('🚪 Mock sign out');
-    isLoggedIn = false;
-    currentSession = null;
-    window.__mockIsLoggedIn = false;
-    window.__mockSession = null;
+    authState.isLoggedIn = false;
+    authState.currentSession = null;
     
     // Notify app of sign out
-    if (window.__authStateChangeCallback) {
+    if (authState.authCallback) {
       console.log('🔔 Triggering auth state change for sign out');
-      window.__authStateChangeCallback({ 
+      authState.authCallback({ 
         event: 'SIGNED_OUT', 
         session: null 
       });
@@ -159,74 +152,62 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve({ error: null });
   },
   authGetSession: () => {
-    // Check both local and global state
-    const loggedIn = isLoggedIn || window.__mockIsLoggedIn;
-    const session = currentSession || window.__mockSession;
-    
-    console.log('Mock get session, logged in:', loggedIn);
-    if (!loggedIn) {
+    console.log('Mock get session, logged in:', authState.isLoggedIn);
+    if (!authState.isLoggedIn) {
       return Promise.resolve({ 
         data: { session: null },
         error: null
       });
     }
     return Promise.resolve({ 
-      data: { session: session },
+      data: { session: authState.currentSession },
       error: null
     });
   },
   authGetUser: () => {
-    // Check both local and global state
-    const loggedIn = isLoggedIn || window.__mockIsLoggedIn;
-    const session = currentSession || window.__mockSession;
-    
-    console.log('Mock get user, logged in:', loggedIn);
-    if (!loggedIn) {
+    console.log('Mock get user, logged in:', authState.isLoggedIn);
+    if (!authState.isLoggedIn) {
       return Promise.resolve({ 
         data: { user: null },
         error: null
       });
     }
     return Promise.resolve({ 
-      data: { user: session?.user || mockUser },
+      data: { user: authState.currentSession?.user || mockUser },
       error: null
     });
   },
   authSetupListener: () => Promise.resolve(),
   onAuthStateChange: (callback) => {
     // Store the callback to trigger it after login/logout
-    window.__authStateChangeCallback = callback;
+    authState.authCallback = callback;
     
     // Return unsubscribe function
     return () => {
-      window.__authStateChangeCallback = null;
+      authState.authCallback = null;
     };
   },
 
   // User & Session
   setCurrentUser: (user) => {
     if (user) {
-      isLoggedIn = true;
-      currentSession = { ...currentSession, user };
+      authState.isLoggedIn = true;
+      authState.currentSession = { ...authState.currentSession, user };
     }
     return Promise.resolve();
   },
   getCurrentUser: () => {
-    const loggedIn = isLoggedIn || window.__mockIsLoggedIn;
-    const session = currentSession || window.__mockSession;
-    return Promise.resolve(loggedIn ? (session?.user || mockUser) : null);
+    return Promise.resolve(authState.isLoggedIn ? (authState.currentSession?.user || mockUser) : null);
   },
   setSupabaseSession: (session) => {
     if (session) {
-      isLoggedIn = true;
-      currentSession = session;
+      authState.isLoggedIn = true;
+      authState.currentSession = session;
     }
     return Promise.resolve();
   },
   getSupabaseSession: () => {
-    const loggedIn = isLoggedIn || window.__mockIsLoggedIn;
-    const session = currentSession || window.__mockSession;
-    return Promise.resolve(loggedIn ? session : null);
+    return Promise.resolve(authState.isLoggedIn ? authState.currentSession : null);
   },
   
   // Templates
