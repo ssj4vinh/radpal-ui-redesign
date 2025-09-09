@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { generateReport, generateImpression } from '../../agent'
+import { generateReport, generateImpression } from '../mocks/agent'
 import { useAuth } from './useAuth'
 
 export function useAgentReport() {

@@ -163,7 +163,7 @@ export default function TemplateManager({ templates, onSave, onSaveWithAgentLogi
 
     try {
       // Import the default agent logic
-      const { createDefaultAgentLogic } = await import('../../agent/defaultAgentLogic')
+      const { createDefaultAgentLogic } = await import('../mocks/defaultAgentLogic')
       const defaultLogic = createDefaultAgentLogic(newStudyTypeName)
       
       // Process keywords - split by comma and clean up

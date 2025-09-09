@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { updateAgentLogicWithOffline, resetAgentLogicToDefaultWithOffline, getCurrentAgentLogicWithOffline } from '../supabase/updateAgentLogicWithOffline'
-import { EDIT_LOGIC_SYSTEM_PROMPT } from '../../agent/prompts/editLogicSystemPrompt'
+import { EDIT_LOGIC_SYSTEM_PROMPT } from '../mocks/prompts/editLogicSystemPrompt'
 
 interface LogicEditorChatProps {
   userId: string

@@ -1,4 +1,4 @@
-import { askAISystemPrompt } from '../../../agent/prompts/askAISystemPrompt'
+import { askAISystemPrompt } from '../../mocks/prompts/askAISystemPrompt'
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'

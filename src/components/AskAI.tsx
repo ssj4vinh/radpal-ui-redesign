@@ -3,7 +3,7 @@ import { Send, X, RefreshCw, Copy, MessageCircle } from 'lucide-react'
 // import BlurCard from './BlurCard' - replaced with solid container
 import { sendChat } from '../lib/chat/sendChat'
 import { createSession, getSession, appendMessage } from '../supabase/chatSessionsIPC'
-import { askAISystemPrompt } from '../../agent/prompts/askAISystemPrompt'
+import { askAISystemPrompt } from '../mocks/prompts/askAISystemPrompt'
 
 interface Message {
   role: 'system' | 'user' | 'assistant'
