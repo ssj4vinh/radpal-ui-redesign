@@ -113,3 +113,23 @@ ipcMain.on('close-popup', () => {
 ipcMain.on('quit-app', () => {
   app.quit();
 });
+
+// Handle login/main mode resizing
+ipcMain.on('resize-for-login-mode', () => {
+  console.log('Mock: Resize for login mode');
+  if (mainWindow) {
+    mainWindow.setSize(500, 700);
+  }
+});
+
+ipcMain.on('resize-for-main-mode', () => {
+  console.log('Mock: Resize for main mode');
+  if (mainWindow) {
+    mainWindow.setSize(1400, 900);
+  }
+});
+
+// Handle test IPC connection
+ipcMain.on('test-ipc-connection', () => {
+  console.log('Mock: IPC connection test received');
+});

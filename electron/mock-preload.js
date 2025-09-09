@@ -62,22 +62,57 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Authentication
   authSignIn: (email, password) => {
     console.log('Mock sign in:', email);
-    return Promise.resolve({ user: mockUser, session: { access_token: 'mock-token' } });
+    // Return the exact structure the app expects
+    return Promise.resolve({ 
+      data: {
+        user: mockUser, 
+        session: { 
+          access_token: 'mock-token',
+          refresh_token: 'mock-refresh-token',
+          user: mockUser
+        }
+      },
+      error: null
+    });
   },
   authSignUp: (email, password) => {
     console.log('Mock sign up:', email);
-    return Promise.resolve({ user: mockUser, session: { access_token: 'mock-token' } });
+    return Promise.resolve({ 
+      data: {
+        user: mockUser, 
+        session: { 
+          access_token: 'mock-token',
+          refresh_token: 'mock-refresh-token',
+          user: mockUser
+        }
+      },
+      error: null
+    });
   },
   authSignOut: () => {
     console.log('Mock sign out');
-    return Promise.resolve({ success: true });
+    return Promise.resolve({ error: null });
   },
-  authGetSession: () => Promise.resolve({ user: mockUser, session: { access_token: 'mock-token' } }),
-  authGetUser: () => Promise.resolve(mockUser),
+  authGetSession: () => Promise.resolve({ 
+    data: { 
+      session: { 
+        access_token: 'mock-token',
+        refresh_token: 'mock-refresh-token',
+        user: mockUser
+      }
+    },
+    error: null
+  }),
+  authGetUser: () => Promise.resolve({ 
+    data: { user: mockUser },
+    error: null
+  }),
   authSetupListener: () => Promise.resolve(),
   onAuthStateChange: (callback) => {
-    // Simulate auth state
-    setTimeout(() => callback({ user: mockUser }), 100);
+    // Simulate auth state change after a brief delay
+    setTimeout(() => {
+      callback({ event: 'SIGNED_IN', session: { user: mockUser } });
+    }, 100);
     return () => {};
   },
 
