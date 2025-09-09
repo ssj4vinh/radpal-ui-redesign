@@ -65,36 +65,50 @@ const mockReports = [
 contextBridge.exposeInMainWorld('electronAPI', {
   // Authentication
   authSignIn: (email, password) => {
-    console.log('Mock sign in:', email);
+    console.log('🔐 Mock sign in:', email);
     // Accept any email/password
     isLoggedIn = true;
+    const signedInUser = { ...mockUser, email: email || mockUser.email };
     currentSession = { 
       access_token: 'mock-token',
       refresh_token: 'mock-refresh-token',
-      user: { ...mockUser, email: email || mockUser.email }
+      user: signedInUser
     };
+    
+    // Trigger window resize after successful login
+    setTimeout(() => {
+      console.log('📐 Triggering resize for main mode');
+      ipcRenderer.send('resize-for-main-mode');
+    }, 100);
     
     return Promise.resolve({ 
       data: {
-        user: { ...mockUser, email: email || mockUser.email }, 
+        user: signedInUser, 
         session: currentSession
       },
       error: null
     });
   },
   authSignUp: (email, password) => {
-    console.log('Mock sign up:', email);
+    console.log('📝 Mock sign up:', email);
     // Accept any email/password
     isLoggedIn = true;
+    const signedUpUser = { ...mockUser, email: email || mockUser.email };
     currentSession = { 
       access_token: 'mock-token',
       refresh_token: 'mock-refresh-token',
-      user: { ...mockUser, email: email || mockUser.email }
+      user: signedUpUser
     };
+    
+    // Trigger window resize after successful signup
+    setTimeout(() => {
+      console.log('📐 Triggering resize for main mode');
+      ipcRenderer.send('resize-for-main-mode');
+    }, 100);
     
     return Promise.resolve({ 
       data: {
-        user: { ...mockUser, email: email || mockUser.email }, 
+        user: signedUpUser, 
         session: currentSession
       },
       error: null
@@ -120,6 +134,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     });
   },
   authGetUser: () => {
+    console.log('Mock get user, logged in:', isLoggedIn);
     if (!isLoggedIn) {
       return Promise.resolve({ 
         data: { user: null },
@@ -307,11 +322,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTriggerReportGeneration: (callback) => () => {},
   onTriggerImpressionGeneration: (callback) => () => {},
 
-  // Utility
-  checkInviteCode: (code) => Promise.resolve({ valid: true }),
-  markInviteCodeUsed: (data) => Promise.resolve({ success: true }),
-  checkUserExists: (userId) => Promise.resolve({ exists: true }),
-  triggerTemplateCopy: (userId) => Promise.resolve({ success: true }),
+  // Utility - Fixed to match expected response structure
+  checkInviteCode: (code) => {
+    console.log('Mock check invite code:', code);
+    return Promise.resolve({ 
+      data: { valid: true },
+      error: null 
+    });
+  },
+  markInviteCodeUsed: (data) => {
+    console.log('Mock mark invite code used:', data);
+    return Promise.resolve({ 
+      data: { success: true },
+      error: null 
+    });
+  },
+  checkUserExists: (userId) => {
+    console.log('Mock check user exists:', userId);
+    return Promise.resolve({ 
+      data: { exists: false }, // Return false so it doesn't block signup
+      error: null 
+    });
+  },
+  triggerTemplateCopy: (userId) => {
+    console.log('Mock trigger template copy:', userId);
+    return Promise.resolve({ 
+      data: { success: true },
+      error: null 
+    });
+  },
   
   // User Profile
   fetchUserProfile: (userId) => Promise.resolve({
