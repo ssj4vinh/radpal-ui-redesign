@@ -13,17 +13,27 @@ const authState = {
   authCallback: null
 };
 
-// Mock data
+// Mock data - Premium tier user with all features
 const mockUser = {
   id: 'test-user-123',
   email: 'demo@radpal.com',
+  email_verified: true,
   firstName: 'Demo',
   lastName: 'User',
+  user_metadata: {
+    firstName: 'Demo',
+    lastName: 'User',
+    tier: 3
+  },
+  app_metadata: {
+    tier: 3
+  },
   tier: 3,
   subscription: {
     tier: 3,
     name: 'Premium',
-    token_limit: 50
+    token_limit: 50,
+    status: 'active'
   }
 };
 
@@ -228,8 +238,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
         error: null
       });
     }
+    // Ensure user has tier 3
+    const user = authState.currentSession?.user || mockUser;
     return Promise.resolve({ 
-      data: { user: authState.currentSession?.user || mockUser },
+      data: { 
+        user: {
+          ...user,
+          tier: 3,  // Force tier 3
+          subscription: {
+            tier: 3,
+            name: 'Premium',
+            token_limit: 50,
+            status: 'active'
+          }
+        }
+      },
       error: null
     });
   },
@@ -254,7 +277,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   getCurrentUser: () => {
     console.log('Mock getCurrentUser, logged in:', authState.isLoggedIn);
-    return Promise.resolve(authState.isLoggedIn ? (authState.currentSession?.user || mockUser) : null);
+    if (!authState.isLoggedIn) return Promise.resolve(null);
+    
+    const user = authState.currentSession?.user || mockUser;
+    return Promise.resolve({
+      ...user,
+      tier: 3,  // Force tier 3
+      subscription: {
+        tier: 3,
+        name: 'Premium', 
+        token_limit: 50,
+        status: 'active'
+      }
+    });
   },
   setSupabaseSession: (session) => {
     if (session) {
