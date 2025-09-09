@@ -78,20 +78,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
     authState.isLoggedIn = true;
     
-    // Trigger auth state change callback
+    // Notify app of auth state change IMMEDIATELY
+    if (authState.authCallback) {
+      console.log('🔔 Triggering auth state change callback IMMEDIATELY');
+      authState.authCallback({ 
+        event: 'SIGNED_IN', 
+        session: authState.currentSession 
+      });
+    }
+    
+    // Then resize window
     setTimeout(() => {
       console.log('📐 Triggering resize for main mode');
       ipcRenderer.send('resize-for-main-mode');
-      
-      // Notify app of auth state change
-      if (authState.authCallback) {
-        console.log('🔔 Triggering auth state change callback');
-        authState.authCallback({ 
-          event: 'SIGNED_IN', 
-          session: authState.currentSession 
-        });
-      }
-    }, 100);
+    }, 50);
     
     return Promise.resolve({ 
       data: {
@@ -112,20 +112,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
     authState.isLoggedIn = true;
     
-    // Trigger auth state change callback
+    // Notify app of auth state change IMMEDIATELY
+    if (authState.authCallback) {
+      console.log('🔔 Triggering auth state change callback IMMEDIATELY');
+      authState.authCallback({ 
+        event: 'SIGNED_IN', 
+        session: authState.currentSession 
+      });
+    }
+    
+    // Then resize window
     setTimeout(() => {
       console.log('📐 Triggering resize for main mode');
       ipcRenderer.send('resize-for-main-mode');
-      
-      // Notify app of auth state change
-      if (authState.authCallback) {
-        console.log('🔔 Triggering auth state change callback');
-        authState.authCallback({ 
-          event: 'SIGNED_IN', 
-          session: authState.currentSession 
-        });
-      }
-    }, 100);
+    }, 50);
     
     return Promise.resolve({ 
       data: {
@@ -152,15 +152,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve({ error: null });
   },
   authGetSession: () => {
-    console.log('Mock get session, logged in:', authState.isLoggedIn);
-    if (!authState.isLoggedIn) {
+    console.log('Mock get session, logged in:', authState.isLoggedIn, 'session:', authState.currentSession);
+    if (!authState.isLoggedIn || !authState.currentSession) {
       return Promise.resolve({ 
         data: { session: null },
         error: null
       });
     }
+    // Return the session with the user included
     return Promise.resolve({ 
-      data: { session: authState.currentSession },
+      data: { 
+        session: {
+          ...authState.currentSession,
+          user: authState.currentSession.user
+        }
+      },
       error: null
     });
   },
@@ -197,6 +203,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve();
   },
   getCurrentUser: () => {
+    console.log('Mock getCurrentUser, logged in:', authState.isLoggedIn);
     return Promise.resolve(authState.isLoggedIn ? (authState.currentSession?.user || mockUser) : null);
   },
   setSupabaseSession: (session) => {
@@ -207,6 +214,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve();
   },
   getSupabaseSession: () => {
+    console.log('Mock getSupabaseSession, logged in:', authState.isLoggedIn);
     return Promise.resolve(authState.isLoggedIn ? authState.currentSession : null);
   },
   
