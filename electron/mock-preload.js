@@ -1,9 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Track login state - use a shared object to maintain state
+// Track login state - START LOGGED IN for UI development
 const authState = {
-  isLoggedIn: false,
-  currentSession: null,
+  isLoggedIn: true,  // Start logged in
+  currentSession: {
+    access_token: 'mock-token',
+    refresh_token: 'mock-refresh-token', 
+    expires_in: 3600,
+    token_type: 'bearer',
+    user: null  // Will be set below
+  },
   authCallback: null
 };
 
@@ -20,6 +26,9 @@ const mockUser = {
     token_limit: 50
   }
 };
+
+// Set the user in the session
+authState.currentSession.user = mockUser;
 
 const mockTemplates = [
   { id: 1, name: 'Normal Study', content: 'No acute findings.' },
@@ -196,7 +205,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return Promise.resolve({ error: null });
   },
   authGetSession: () => {
-    console.log('Mock get session, logged in:', authState.isLoggedIn, 'session:', authState.currentSession);
+    console.log('📌 Mock get session, logged in:', authState.isLoggedIn);
     if (!authState.isLoggedIn || !authState.currentSession) {
       return Promise.resolve({ 
         data: { session: null },
@@ -206,10 +215,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Return the session with the user included
     return Promise.resolve({ 
       data: { 
-        session: {
-          ...authState.currentSession,
-          user: authState.currentSession.user
-        }
+        session: authState.currentSession
       },
       error: null
     });
@@ -450,7 +456,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveUserProfile: (profile) => {
     console.log('Mock save user profile:', profile);
     return Promise.resolve({ success: true });
-  }
+  },
+  
+  // Auto-update - DISABLED for UI development
+  checkForUpdates: () => {
+    console.log('🚫 Auto-update disabled for UI development');
+    return Promise.resolve({ updateAvailable: false });
+  },
+  onUpdateAvailable: (callback) => () => {},
+  onUpdateDownloaded: (callback) => () => {},
+  downloadUpdate: () => Promise.resolve(),
+  quitAndInstall: () => console.log('Mock quit and install')
 });
 
-console.log('Mock preload script loaded - UI development mode');
+console.log('✅ Mock preload script loaded - UI development mode');
+console.log('👤 Starting with user already logged in:', mockUser.email);
