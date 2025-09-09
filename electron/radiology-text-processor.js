@@ -285,12 +285,12 @@ class RadiologyTextProcessor {
 
     // NOW handle remaining punctuation commands - replace words with punctuation
     // IMPORTANT: Always ensure a space after punctuation to handle pause-separated chunks
-    processed = processed.replace(/\s*(period|full stop)\s*/gi, '. ');
-    processed = processed.replace(/\s*comma\s*/gi, ', ');
+    processed = processed.replace(/\b(period|full stop)\b/gi, '. ');
+    processed = processed.replace(/\bcomma\b/gi, ', ');
     
     // Clean up excessive spacing but preserve single spaces after punctuation
     // Keep trailing spaces after periods/commas for next chunk
-    processed = processed.replace(/[ \t]{2,}/g, ' ');  // Replace multiple spaces/tabs with single space (but preserve newlines)
+    processed = processed.replace(/[ \t]{3,}/g, ' ');  // Replace 3+ spaces/tabs with single space (but preserve newlines)
     
     // Fix the specific issue where periods don't have proper spacing before the next sentence
     // Ensure there's ALWAYS a space after periods, even at the end of the chunk
@@ -304,10 +304,10 @@ class RadiologyTextProcessor {
     processed = processed.replace(/([,;:])([A-Za-z])/g, '$1 $2')
     
     // Handle other punctuation with consistent spacing
-    processed = processed.replace(/\s*colon\s*/gi, ': ');
-    processed = processed.replace(/\s*semicolon\s*/gi, '; ');
-    processed = processed.replace(/\s*question mark\s*/gi, '? ');
-    processed = processed.replace(/\s*exclamation mark\s*/gi, '! ');
+    processed = processed.replace(/\bcolon\b/gi, ':');
+    processed = processed.replace(/\bsemicolon\b/gi, ';');
+    processed = processed.replace(/\bquestion mark\b/gi, '?');
+    processed = processed.replace(/\bexclamation mark\b/gi, '!');
     
     // Clean up trailing spaces for punctuation at the end
     processed = processed.replace(/:\s+$/g, ':');

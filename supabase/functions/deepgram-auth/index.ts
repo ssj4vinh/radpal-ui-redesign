@@ -56,7 +56,8 @@ serve(async (req) => {
         1: 0,     // Basic: No dictation access
         2: 30,    // Pro: 30 minutes/day
         3: 60,    // Premium: 60 minutes/day
-        4: 1440   // Unlimited: 24 hours/day (effectively unlimited)
+        4: 200,   // Tester: 200 minutes/day (for dataset collection)
+        5: 1440   // Developer: 24 hours/day (effectively unlimited)
       }
 
       const userTier = subscription?.tier || 1

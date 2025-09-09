@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Minus, Save, X, Search, Upload, Download } from 'lucide-react';
 
 interface MedicalTerm {
@@ -21,6 +21,7 @@ const MedicalTermsManager: React.FC<MedicalTermsManagerProps> = ({ isOpen, onClo
   const [newCategory, setNewCategory] = useState('custom');
   const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   console.log('🏥 MedicalTermsManager render, isOpen:', isOpen);
 
@@ -39,6 +40,13 @@ const MedicalTermsManager: React.FC<MedicalTermsManagerProps> = ({ isOpen, onClo
     if (isOpen) {
       loadTerms();
     }
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [isOpen]);
 
   const loadTerms = async () => {
@@ -56,6 +64,13 @@ const MedicalTermsManager: React.FC<MedicalTermsManagerProps> = ({ isOpen, onClo
             }
           }
         }
+        // Sort terms alphabetically by category and then by term
+        termsList.sort((a, b) => {
+          if (a.category !== b.category) {
+            return a.category.localeCompare(b.category);
+          }
+          return a.term.toLowerCase().localeCompare(b.term.toLowerCase());
+        });
         setTerms(termsList);
       }
     } catch (error) {
@@ -71,16 +86,23 @@ const MedicalTermsManager: React.FC<MedicalTermsManagerProps> = ({ isOpen, onClo
       const result = await window.electronAPI.saveMedicalTerms(terms);
       if (result.success) {
         setHasChanges(false);
-        // Terms are automatically synchronized with Deepgram
+        // Reload terms to ensure we have the latest from database
+        await loadTerms();
+        // Show success feedback
+        console.log('✅ Medical terms saved successfully');
+      } else {
+        console.error('Failed to save medical terms:', result.error);
+        alert('Failed to save medical terms: ' + (result.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Failed to save medical terms:', error);
+      alert('Failed to save medical terms: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const addTerm = () => {
+  const addTerm = async () => {
     if (newTerm.trim()) {
       const termExists = terms.some(t => 
         t.term.toLowerCase() === newTerm.toLowerCase() && 
@@ -88,14 +110,43 @@ const MedicalTermsManager: React.FC<MedicalTermsManagerProps> = ({ isOpen, onClo
       );
       
       if (!termExists) {
-        setTerms([...terms, { 
+        // Create new term
+        const newTermObj = { 
           term: newTerm.trim(), 
           weight: newWeight, 
           category: newCategory 
-        }]);
+        };
+        
+        // Insert in alphabetical order within the same category
+        const newTermsList = [...terms, newTermObj].sort((a, b) => {
+          // First sort by category
+          if (a.category !== b.category) {
+            return a.category.localeCompare(b.category);
+          }
+          // Then sort alphabetically by term within the same category
+          return a.term.toLowerCase().localeCompare(b.term.toLowerCase());
+        });
+        
+        setTerms(newTermsList);
         setNewTerm('');
         setNewWeight(2);
         setHasChanges(true);
+        
+        // Auto-save the new term
+        try {
+          setLoading(true);
+          const result = await window.electronAPI.saveMedicalTerms(newTermsList);
+          if (result.success) {
+            setHasChanges(false);
+            console.log('✅ New term added and saved');
+          } else {
+            console.error('Failed to save new term:', result.error);
+          }
+        } catch (error) {
+          console.error('Failed to save new term:', error);
+        } finally {
+          setLoading(false);
+        }
       }
     }
   };
@@ -106,12 +157,51 @@ const MedicalTermsManager: React.FC<MedicalTermsManagerProps> = ({ isOpen, onClo
     updatedTerms[index].weight = newWeight;
     setTerms(updatedTerms);
     setHasChanges(true);
+    
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    // Auto-save after 1 second of no changes
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        setLoading(true);
+        const result = await window.electronAPI.saveMedicalTerms(updatedTerms);
+        if (result.success) {
+          setHasChanges(false);
+          console.log('✅ Weight updated and saved');
+        } else {
+          console.error('Failed to save weight update:', result.error);
+        }
+      } catch (error) {
+        console.error('Failed to save weight update:', error);
+      } finally {
+        setLoading(false);
+      }
+    }, 1000);
   };
 
-  const removeTerm = (index: number) => {
+  const removeTerm = async (index: number) => {
     const updatedTerms = terms.filter((_, i) => i !== index);
     setTerms(updatedTerms);
     setHasChanges(true);
+    
+    // Auto-save after removing term
+    try {
+      setLoading(true);
+      const result = await window.electronAPI.saveMedicalTerms(updatedTerms);
+      if (result.success) {
+        setHasChanges(false);
+        console.log('✅ Term removed and saved');
+      } else {
+        console.error('Failed to save after removing term:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to save after removing term:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredTerms = terms.filter(term => {
@@ -308,9 +398,9 @@ const MedicalTermsManager: React.FC<MedicalTermsManagerProps> = ({ isOpen, onClo
           />
           <button
             onClick={addTerm}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
           >
-            <Plus size={16} />
+            Add
           </button>
         </div>
 
@@ -410,7 +500,9 @@ const MedicalTermsManager: React.FC<MedicalTermsManagerProps> = ({ isOpen, onClo
         }}>
           <div style={{ fontSize: '14px', color: '#9ca3af' }}>
             {filteredTerms.length} terms shown
-            {hasChanges && <span style={{ color: '#fbbf24', marginLeft: '8px' }}>• Unsaved changes</span>}
+            {loading && <span style={{ color: '#60a5fa', marginLeft: '8px' }}>• Saving...</span>}
+            {!loading && hasChanges && <span style={{ color: '#fbbf24', marginLeft: '8px' }}>• Unsaved changes</span>}
+            {!loading && !hasChanges && <span style={{ color: '#10b981', marginLeft: '8px' }}>• All changes saved</span>}
           </div>
           <button
             onClick={saveTerms}
