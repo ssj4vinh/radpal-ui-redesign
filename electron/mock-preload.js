@@ -79,10 +79,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     window.__mockSession = currentSession;
     window.__mockIsLoggedIn = true;
     
-    // Trigger window resize after successful login
+    // Trigger auth state change callback
     setTimeout(() => {
       console.log('📐 Triggering resize for main mode');
       ipcRenderer.send('resize-for-main-mode');
+      
+      // Notify app of auth state change
+      if (window.__authStateChangeCallback) {
+        console.log('🔔 Triggering auth state change callback');
+        window.__authStateChangeCallback({ 
+          event: 'SIGNED_IN', 
+          session: currentSession 
+        });
+      }
     }, 100);
     
     return Promise.resolve({ 
@@ -108,10 +117,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     window.__mockSession = currentSession;
     window.__mockIsLoggedIn = true;
     
-    // Trigger window resize after successful signup
+    // Trigger auth state change callback
     setTimeout(() => {
       console.log('📐 Triggering resize for main mode');
       ipcRenderer.send('resize-for-main-mode');
+      
+      // Notify app of auth state change
+      if (window.__authStateChangeCallback) {
+        console.log('🔔 Triggering auth state change callback');
+        window.__authStateChangeCallback({ 
+          event: 'SIGNED_IN', 
+          session: currentSession 
+        });
+      }
     }, 100);
     
     return Promise.resolve({ 
@@ -128,6 +146,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     currentSession = null;
     window.__mockIsLoggedIn = false;
     window.__mockSession = null;
+    
+    // Notify app of sign out
+    if (window.__authStateChangeCallback) {
+      console.log('🔔 Triggering auth state change for sign out');
+      window.__authStateChangeCallback({ 
+        event: 'SIGNED_OUT', 
+        session: null 
+      });
+    }
+    
     return Promise.resolve({ error: null });
   },
   authGetSession: () => {
@@ -166,9 +194,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   authSetupListener: () => Promise.resolve(),
   onAuthStateChange: (callback) => {
-    // Don't auto-login - wait for actual login
+    // Store the callback to trigger it after login/logout
+    window.__authStateChangeCallback = callback;
+    
     // Return unsubscribe function
-    return () => {};
+    return () => {
+      window.__authStateChangeCallback = null;
+    };
   },
 
   // User & Session
